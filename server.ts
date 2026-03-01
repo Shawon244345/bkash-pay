@@ -53,7 +53,10 @@ db.exec(`
     status TEXT,
     reason TEXT,
     sku TEXT,
+    refund_execution_time DATETIME,
     response_data TEXT,
+    ip_address TEXT,
+    initiated_by TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -65,6 +68,17 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Migration for refunds table to ensure all columns exist
+try {
+  db.prepare("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE refunds ADD COLUMN ip_address TEXT").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE refunds ADD COLUMN initiated_by TEXT").run();
+} catch (e) {}
 
 // Seed default credentials if not present
 const seedSettings = [
@@ -156,33 +170,53 @@ app.post("/api/bkash/create-payment", async (req, res) => {
 
 app.get("/api/bkash/callback", async (req, res) => {
   const { paymentID, status } = req.query;
+  logToFile("bKash Callback Received", { paymentID, status });
+
+  if (!paymentID) {
+    return res.redirect("/payment-failed?error=missing_payment_id");
+  }
 
   if (status === "success") {
     try {
       const headers = await getBkashHeaders();
       const baseUrl = getSetting("BKASH_BASE_URL");
+      
       const { data } = await axios.post(
         `${baseUrl}/tokenized/checkout/execute`,
         { paymentID },
         { headers }
       );
 
+      logToFile("bKash Execute Response", data);
+
       if (data.statusCode === "0000") {
         db.prepare("UPDATE transactions SET status = ?, trx_id = ?, customer_msisdn = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
           .run("completed", data.trxID, data.customerMsisdn, paymentID);
         
-        return res.redirect("/payment-success?trxID=" + data.trxID);
+        const params = new URLSearchParams({
+          trxID: data.trxID,
+          amount: data.amount,
+          customer: data.customerMsisdn || "",
+          invoice: data.merchantInvoiceNumber || "",
+          time: data.paymentExecuteTime || new Date().toISOString()
+        });
+        return res.redirect(`/payment-success?${params.toString()}`);
       } else {
         db.prepare("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
           .run("failed", paymentID);
-        return res.redirect("/payment-failed?error=" + data.statusMessage);
+        return res.redirect("/payment-failed?error=" + (data.statusMessage || "Execution failed"));
       }
-    } catch (error) {
-      return res.redirect("/payment-failed?error=execution_failed");
+    } catch (error: any) {
+      logToFile("bKash Execute Error", error.response?.data || error.message);
+      return res.redirect("/payment-failed?error=execution_api_error");
     }
   }
   
-  res.redirect("/payment-failed?status=" + status);
+  // Handle cancel, failure, or other statuses
+  db.prepare("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
+    .run(status || "failed", paymentID);
+    
+  res.redirect("/payment-failed?status=" + (status || "unknown"));
 });
 
 app.get("/api/admin/stats", (req, res) => {
@@ -246,50 +280,66 @@ app.post("/api/admin/settings", (req, res) => {
 app.post("/api/bkash/refund", async (req, res) => {
   try {
     const { paymentID, trxID, amount, sku, reason } = req.body;
+    const ip = req.ip || req.headers['x-forwarded-for'] || "";
+    const initiated_by = "admin"; // In a real app, this would come from session
     
     // Check if already refunded
-    const existing = db.prepare("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'").get();
+    const existing = db.prepare("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'").get(trxID);
     if (existing) {
       return res.status(400).json({ error: "This transaction has already been refunded" });
     }
 
     const headers = await getBkashHeaders();
     const baseUrl = getSetting("BKASH_BASE_URL");
-    const { data } = await axios.post(
-      `${baseUrl}/tokenized/checkout/payment/refund`,
-      {
-        paymentID,
-        amount: amount.toString(),
-        trxID,
-        sku: sku || "REFUND",
-        reason: reason || "Customer requested refund"
-      },
-      { headers }
-    );
+    
+    let responseData;
+    try {
+      const { data } = await axios.post(
+        `${baseUrl}/tokenized/checkout/payment/refund`,
+        {
+          paymentID,
+          amount: amount.toString(),
+          trxID,
+          sku: sku || "REFUND",
+          reason: reason || "Customer requested refund"
+        },
+        { headers }
+      );
+      responseData = data;
+    } catch (apiError: any) {
+      responseData = apiError.response?.data || { statusMessage: apiError.message };
+      logToFile("bKash Refund API Error", responseData);
+    }
 
-    const status = data.refundTrxID ? "COMPLETED" : "FAILED";
-    const refundID = data.refundTrxID || `FAIL-${uuidv4().slice(0, 8)}`;
+    const status = responseData.refundTrxID ? "COMPLETED" : "FAILED";
+    const refundID = responseData.refundTrxID || `FAIL-${uuidv4().slice(0, 8)}`;
+    const executionTime = responseData.completedTime || null;
 
     db.prepare(`
-      INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, response_data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, refund_execution_time, response_data, ip_address, initiated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       uuidv4(),
       refundID,
       trxID,
       paymentID,
       amount,
-      data.amount || amount,
+      responseData.amount || amount,
       status,
       reason,
       sku,
-      JSON.stringify(data)
+      executionTime,
+      JSON.stringify(responseData),
+      ip,
+      initiated_by
     );
 
     if (status === "COMPLETED") {
+      // Update original transaction status to refunded
+      db.prepare("UPDATE transactions SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE trx_id = ?").run(trxID);
       res.json({ message: "Refund processed successfully", refundID });
     } else {
-      res.status(400).json({ error: data.statusMessage || "Refund failed" });
+      res.status(400).json({ error: responseData.statusMessage || "Refund failed" });
     }
   } catch (error: any) {
     console.error("Refund Error:", error.response?.data || error.message);
