@@ -1142,7 +1142,7 @@ const Refunds = () => {
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }}
-              onClick={() => setShowConfirmRefund(false)}
+              onClick={() => !isProcessing && setShowConfirmRefund(false)}
               className="absolute inset-0 bg-black/90 backdrop-blur-md"
             />
             <motion.div 
@@ -1154,29 +1154,53 @@ const Refunds = () => {
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
               
               <div className="flex flex-col items-center text-center space-y-4">
-                <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center">
-                  <AlertCircle size={32} className="text-rose-500" />
+                <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center relative">
+                  <div className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping opacity-20" />
+                  <AlertCircle size={40} className="text-rose-500 relative z-10" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-black text-white">Confirm Refund</h3>
+                  <h3 className="text-2xl font-black text-white tracking-tight">Confirm Refund</h3>
                   <p className="text-zinc-400 text-sm">
-                    Are you sure you want to process a refund of <span className="text-rose-500 font-bold">{formatCurrency(parseFloat(refundForm.amount))}</span> for transaction <span className="text-white font-mono">{foundTx?.trx_id}</span>?
+                    You are about to initiate a refund for this transaction. This action is irreversible.
                   </p>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/50 rounded-2xl border border-zinc-800 p-5 space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Refund Amount</span>
+                  <span className="text-xl font-black text-rose-500">{formatCurrency(parseFloat(refundForm.amount) || 0)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-left">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold">TrxID</p>
+                    <p className="text-xs font-mono text-white truncate">{foundTx?.trx_id}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold">SKU</p>
+                    <p className="text-xs text-white truncate">{refundForm.sku || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="space-y-1 text-left">
+                  <p className="text-[10px] text-zinc-500 uppercase font-bold">Reason</p>
+                  <p className="text-xs text-zinc-300 italic">"{refundForm.reason || 'No reason provided'}"</p>
                 </div>
               </div>
 
               <div className="flex gap-3 pt-4">
                 <button 
+                  disabled={isProcessing}
                   onClick={() => setShowConfirmRefund(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all"
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
+                  disabled={isProcessing}
                   onClick={processRefund}
-                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-rose-500/20"
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  Confirm Refund
+                  {isProcessing ? <Loader2 className="animate-spin" size={20} /> : "Confirm Refund"}
                 </button>
               </div>
             </motion.div>
@@ -1304,20 +1328,31 @@ const AdminLogin = () => {
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedUsername"));
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin123") {
-      localStorage.setItem("isAdmin", "true");
-      if (rememberMe) {
-        localStorage.setItem("rememberedUsername", username);
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        localStorage.setItem("isAdmin", "true");
+        if (rememberMe) {
+          localStorage.setItem("rememberedUsername", username);
+        } else {
+          localStorage.removeItem("rememberedUsername");
+        }
+        window.dispatchEvent(new Event("storage"));
+        toast.success("Login successful! Welcome back.");
+        navigate("/admin");
       } else {
-        localStorage.removeItem("rememberedUsername");
+        toast.error(data.error || "Invalid credentials");
       }
-      window.dispatchEvent(new Event("storage"));
-      toast.success("Login successful! Welcome back.");
-      navigate("/admin");
-    } else {
-      toast.error("Invalid credentials. Try admin / admin123");
+    } catch (err) {
+      toast.error("Login failed. Please try again.");
     }
   };
 
@@ -1392,7 +1427,12 @@ const UserProfile = () => {
     phone: localStorage.getItem("userPhone") || "+880 1997-473177",
     avatar: localStorage.getItem("userAvatar") || "https://picsum.photos/seed/admin/200/200"
   });
+  const [credentials, setCredentials] = useState({
+    username: "",
+    password: ""
+  });
   const [isEditing, setIsEditing] = useState(false);
+  const [isUpdatingCreds, setIsUpdatingCreds] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1404,8 +1444,36 @@ const UserProfile = () => {
     toast.success("Profile updated successfully!");
   };
 
+  const handleUpdateCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!credentials.username || !credentials.password) {
+      toast.error("Username and password are required");
+      return;
+    }
+    
+    setIsUpdatingCreds(true);
+    try {
+      const res = await fetch("/api/admin/update-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Credentials updated successfully!");
+        setCredentials({ username: "", password: "" });
+      } else {
+        toast.error(data.error || "Failed to update credentials");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsUpdatingCreds(false);
+    }
+  };
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
         <div className="h-32 bg-gradient-to-r from-bkash to-rose-400" />
         <div className="px-8 pb-8">
@@ -1494,6 +1562,47 @@ const UserProfile = () => {
             )}
           </form>
         </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+          <ShieldCheck className="text-bkash" />
+          Login Credentials
+        </h3>
+        <form onSubmit={handleUpdateCredentials} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-400">New Username</label>
+              <input 
+                type="text" 
+                value={credentials.username}
+                onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                placeholder="Enter new username"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-400">New Password</label>
+              <input 
+                type="password" 
+                value={credentials.password}
+                onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                placeholder="Enter new password"
+                required
+              />
+            </div>
+          </div>
+          <button 
+            type="submit"
+            disabled={isUpdatingCreds}
+            className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isUpdatingCreds ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+            Update Credentials
+          </button>
+        </form>
       </div>
     </motion.div>
   );

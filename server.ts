@@ -87,7 +87,9 @@ const seedSettings = [
   { key: 'BKASH_USERNAME', value: '01997473177' },
   { key: 'BKASH_PASSWORD', value: 'V9^@JbA_$6x' },
   { key: 'BKASH_BASE_URL', value: 'https://tokenized.pay.bka.sh/v1.2.0-beta' },
-  { key: 'APP_URL', value: process.env.APP_URL || "" }
+  { key: 'APP_URL', value: process.env.APP_URL || "" },
+  { key: 'ADMIN_USERNAME', value: 'admin' },
+  { key: 'ADMIN_PASSWORD', value: 'admin123' }
 ];
 
 const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
@@ -217,6 +219,35 @@ app.get("/api/bkash/callback", async (req, res) => {
     .run(status || "failed", paymentID);
     
   res.redirect("/payment-failed?status=" + (status || "unknown"));
+});
+
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+  const dbUsername = getSetting("ADMIN_USERNAME");
+  const dbPassword = getSetting("ADMIN_PASSWORD");
+
+  if (username === dbUsername && password === dbPassword) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: "Invalid credentials" });
+  }
+});
+
+app.post("/api/admin/update-credentials", (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+
+  const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
+  
+  db.transaction(() => {
+    stmt.run("ADMIN_USERNAME", username);
+    stmt.run("ADMIN_PASSWORD", password);
+  })();
+  
+  res.json({ message: "Credentials updated successfully" });
 });
 
 app.get("/api/admin/stats", (req, res) => {
