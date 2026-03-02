@@ -28,7 +28,14 @@ import {
   Menu,
   X,
   RotateCcw,
-  Info
+  Info,
+  Smartphone,
+  Apple,
+  Play,
+  QrCode,
+  Code,
+  Copy,
+  Terminal
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -260,7 +267,7 @@ const Dashboard = () => {
   );
 };
 
-const Checkout = () => {
+const Checkout = ({ onInstall, isInstallable }: { onInstall: () => void, isInstallable: boolean }) => {
   const [amount, setAmount] = useState("100");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showManualRedirect, setShowManualRedirect] = useState(false);
@@ -319,14 +326,40 @@ const Checkout = () => {
                 <p className="opacity-80 mt-1">Enterprise Payment Gateway</p>
               </div>
             </div>
-            <Link 
-              to="/admin/login" 
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
-            >
-              <ShieldCheck size={18} /> Admin Panel
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Link 
+                to="/admin/login" 
+                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <ShieldCheck size={18} /> Admin Panel
+              </Link>
+              <Link 
+                to="/download" 
+                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <Smartphone size={18} /> Get App
+              </Link>
+            </div>
           </div>
           <div className="p-8 space-y-8">
+            {isInstallable && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onInstall}
+                className="w-full bg-gradient-to-r from-bkash to-pink-600 text-white font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-bkash/30 group relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12" />
+                <Download className="group-hover:translate-y-1 transition-transform" size={24} />
+                <div className="text-left">
+                  <p className="text-[10px] uppercase tracking-tighter leading-none opacity-80">One-Click Setup</p>
+                  <p className="text-lg leading-tight">Install App Instantly</p>
+                </div>
+              </motion.button>
+            )}
+
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-400">Payment Amount (BDT)</label>
               <div className="relative">
@@ -363,6 +396,13 @@ const Checkout = () => {
           </div>
         </div>
       </motion.div>
+
+      <div className="mt-12 flex flex-wrap justify-center gap-x-8 gap-y-2 text-zinc-500 text-xs font-medium uppercase tracking-widest">
+        <Link to="/admin" className="hover:text-white transition-colors">Merchant Login</Link>
+        <Link to="/developer" className="hover:text-white transition-colors">Developer API</Link>
+        <Link to="/download" className="hover:text-white transition-colors">Get App</Link>
+        <a href="#" className="hover:text-white transition-colors">Support</a>
+      </div>
     </div>
   );
 };
@@ -1608,7 +1648,339 @@ const UserProfile = () => {
   );
 };
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+const DeveloperDocs = () => {
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'client' | 'server'>('client');
+  const appUrl = window.location.origin;
+
+  const clientCode = `const axios = require('axios');
+
+// bKash Pay Integration Example (Client-side)
+const BKASH_PAY_API = "${appUrl}/api/bkash/create-payment";
+
+async function createPayment(amount, invoice) {
+  try {
+    const response = await axios.post(BKASH_PAY_API, {
+      amount: amount,
+      invoice: invoice || \`INV-\${Date.now()}\`
+    });
+
+    if (response.data.bkashURL) {
+      console.log("Redirect User to:", response.data.bkashURL);
+      return response.data.bkashURL;
+    }
+  } catch (error) {
+    console.error("Payment Creation Failed:", error.response?.data || error.message);
+  }
+}
+
+// Usage
+createPayment(100, "ORDER-12345");`;
+
+  const serverCode = `const express = require('express');
+const axios = require('axios');
+const Database = require('better-sqlite3');
+const { v4: uuidv4 } = require('uuid');
+
+const app = express();
+app.use(express.json());
+
+// 1. Create Payment Endpoint
+app.post('/api/bkash/create-payment', async (req, res) => {
+  const { amount, invoice } = req.body;
+  
+  // Get bKash Auth Token
+  const authResponse = await axios.post(
+    'https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant',
+    { app_key: 'YOUR_APP_KEY', app_secret: 'YOUR_APP_SECRET' },
+    { headers: { username: 'YOUR_USERNAME', password: 'YOUR_PASSWORD' } }
+  );
+
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": authResponse.data.id_token,
+    "X-APP-Key": 'YOUR_APP_KEY'
+  };
+
+  // Create bKash Payment
+  const { data } = await axios.post(
+    'https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized/checkout/create',
+    {
+      mode: "0011",
+      payerReference: invoice,
+      callbackURL: 'https://your-domain.com/api/bkash/callback',
+      amount: amount.toString(),
+      currency: "BDT",
+      intent: "sale",
+      merchantInvoiceNumber: invoice
+    },
+    { headers }
+  );
+
+  res.json({ bkashURL: data.bkashURL });
+});`;
+
+  const handleCopy = () => {
+    const code = activeTab === 'client' ? clientCode : serverCode;
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success("Code copied to clipboard!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8 max-w-5xl"
+    >
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 backdrop-blur-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-5">
+          <Terminal size={120} />
+        </div>
+        
+        <div className="relative z-10 space-y-6">
+          <div className="inline-flex items-center gap-2 bg-bkash/10 text-bkash px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+            <Code size={14} /> Documentation
+          </div>
+          
+          <h2 className="text-3xl font-bold tracking-tight">Node.js Integration Guide</h2>
+          <p className="text-zinc-400 text-lg max-w-2xl">
+            Everything you need to integrate bKash Pay into your backend. Choose between a simple client-side integration or a full server-side implementation.
+          </p>
+
+          <div className="flex gap-4 pt-4">
+            <button 
+              onClick={() => setActiveTab('client')}
+              className={cn(
+                "px-6 py-2.5 rounded-xl font-bold transition-all border",
+                activeTab === 'client' 
+                  ? "bg-bkash text-white border-bkash shadow-lg shadow-bkash/20" 
+                  : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white"
+              )}
+            >
+              Client Integration
+            </button>
+            <button 
+              onClick={() => setActiveTab('server')}
+              className={cn(
+                "px-6 py-2.5 rounded-xl font-bold transition-all border",
+                activeTab === 'server' 
+                  ? "bg-bkash text-white border-bkash shadow-lg shadow-bkash/20" 
+                  : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white"
+              )}
+            >
+              Server Implementation
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold flex items-center gap-2">
+            <Terminal size={20} className="text-bkash" />
+            {activeTab === 'client' ? 'app.js (Integration)' : 'server.js (Implementation)'}
+          </h3>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleCopy}
+              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium transition-all"
+            >
+              {copied ? <CheckCircle2 size={16} className="text-bkash" /> : <Copy size={16} />}
+              {copied ? "Copied!" : "Copy Code"}
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-rose-500/50" />
+              <div className="w-3 h-3 rounded-full bg-amber-500/50" />
+              <div className="w-3 h-3 rounded-full bg-emerald-500/50" />
+            </div>
+            <span className="text-xs text-zinc-500 font-mono ml-2">
+              {activeTab === 'client' ? 'app.js' : 'server.js'}
+            </span>
+          </div>
+          <pre className="p-6 overflow-x-auto text-sm font-mono leading-relaxed text-zinc-300">
+            <code>{activeTab === 'client' ? clientCode : serverCode}</code>
+          </pre>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl space-y-4">
+          <h4 className="font-bold flex items-center gap-2">
+            <ShieldCheck className="text-bkash" size={20} />
+            Authentication
+          </h4>
+          <p className="text-sm text-zinc-400 leading-relaxed">
+            All requests must be authenticated using the <span className="text-white font-mono">id_token</span> obtained from the grant token endpoint. This token is valid for 1 hour.
+          </p>
+        </div>
+        <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl space-y-4">
+          <h4 className="font-bold flex items-center gap-2">
+            <RotateCcw className="text-bkash" size={20} />
+            Callbacks
+          </h4>
+          <p className="text-sm text-zinc-400 leading-relaxed">
+            Ensure your <span className="text-white font-mono">callbackURL</span> is publicly accessible. bKash will redirect the user to this URL with <span className="text-white font-mono">paymentID</span> and <span className="text-white font-mono">status</span> parameters.
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const DownloadApp = ({ onInstall, isInstallable, isStandalone }: { onInstall: () => void, isInstallable: boolean, isStandalone: boolean }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden"
+    >
+      {/* Background Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-bkash/10 blur-[120px] rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 blur-[120px] rounded-full" />
+
+      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
+        <div className="space-y-8 text-center lg:text-left">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="inline-flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest text-bkash"
+          >
+            <Smartphone size={14} /> {isStandalone ? "App Installed" : "Available Now"}
+          </motion.div>
+          
+          <div className="space-y-4">
+            <h1 className="text-5xl lg:text-7xl font-black tracking-tighter leading-none">
+              {isStandalone ? "You're All Set!" : <>Get the <span className="text-bkash">bKash Pay</span> App</>}
+            </h1>
+            <p className="text-zinc-400 text-lg lg:text-xl max-w-md mx-auto lg:mx-0">
+              {isStandalone 
+                ? "bKash Pay is already installed on your device. You can access it anytime from your home screen or app drawer."
+                : "Install the app instantly on your device without visiting any app store. Fast, secure, and always up to date."
+              }
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <button 
+                onClick={onInstall}
+                disabled={isStandalone}
+                className={cn(
+                  "flex items-center justify-center gap-3 px-8 py-5 rounded-2xl font-bold transition-all shadow-xl group",
+                  isStandalone 
+                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                    : "bg-bkash text-white hover:bg-bkash/90 shadow-bkash/20"
+                )}
+              >
+                {isStandalone ? <CheckCircle2 size={24} /> : <Download size={24} className="group-hover:translate-y-1 transition-transform" />}
+                <div className="text-left">
+                  <p className="text-[10px] uppercase font-black leading-none opacity-60">
+                    {isStandalone ? "Ready to Use" : "Instant Install"}
+                  </p>
+                  <p className="text-lg leading-tight">
+                    {isStandalone ? "App Installed" : "Install Web App"}
+                  </p>
+                </div>
+              </button>
+              
+              <a 
+                href="#" 
+                className="flex items-center justify-center gap-3 bg-zinc-900 border border-zinc-800 text-white px-8 py-5 rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl"
+              >
+                <Smartphone size={24} />
+                <div className="text-left">
+                  <p className="text-[10px] uppercase font-black leading-none opacity-60">Direct Download</p>
+                  <p className="text-lg leading-tight">Download APK</p>
+                </div>
+              </a>
+            </div>
+
+            {!isInstallable && !isStandalone && (
+              <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl max-w-md mx-auto lg:mx-0">
+                <AlertCircle className="text-amber-500 shrink-0" size={18} />
+                <p className="text-xs text-amber-200/80 leading-relaxed text-left">
+                  Your current browser might not support instant installation. For the best experience, please open this page in <span className="text-white font-bold">Google Chrome</span> or <span className="text-white font-bold">Safari</span>.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start opacity-50">
+              <a 
+                href="#" 
+                className="flex items-center gap-2 text-xs font-bold hover:text-white transition-colors"
+              >
+                <Apple size={14} /> App Store
+              </a>
+              <a 
+                href="#" 
+                className="flex items-center gap-2 text-xs font-bold hover:text-white transition-colors"
+              >
+                <Play size={14} /> Google Play
+              </a>
+            </div>
+          </div>
+
+          <div className="pt-8 flex items-center gap-6 justify-center lg:justify-start">
+            <div className="p-3 bg-white rounded-2xl shadow-xl">
+              <QrCode size={80} className="text-black" />
+            </div>
+            <div className="text-left">
+              <p className="font-bold text-white">Scan to Install</p>
+              <p className="text-sm text-zinc-500">Point your camera at the QR code to install the app instantly on your mobile device.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative flex justify-center">
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+            className="relative z-20 w-full max-w-[320px]"
+          >
+            <div className="relative aspect-[9/19] bg-zinc-900 rounded-[3rem] border-8 border-zinc-800 shadow-2xl overflow-hidden">
+              <img 
+                src="https://picsum.photos/seed/app-preview/1080/1920" 
+                alt="App Preview" 
+                className="w-full h-full object-cover opacity-80"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+              <div className="absolute bottom-8 left-8 right-8 space-y-2">
+                <div className="w-12 h-1 bg-bkash rounded-full" />
+                <p className="text-xl font-bold">Secure Payments</p>
+                <p className="text-xs text-zinc-400">Enterprise grade security for every transaction.</p>
+              </div>
+            </div>
+          </motion.div>
+          
+          {/* Decorative Elements */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-bkash/5 blur-3xl rounded-full -z-10" />
+        </div>
+      </div>
+
+      <div className="mt-20 pt-8 border-t border-zinc-900 w-full max-w-4xl flex flex-col md:flex-row justify-between items-center gap-4 text-zinc-500 text-xs font-medium uppercase tracking-widest">
+        <p>© 2024 bKash Pay Enterprise</p>
+        <div className="flex gap-8">
+          <Link to="/" className="hover:text-white transition-colors">Checkout</Link>
+          <Link to="/admin" className="hover:text-white transition-colors">Admin</Link>
+          <Link to="/developer" className="hover:text-white transition-colors">Developer API</Link>
+          <a href="#" className="hover:text-white transition-colors">Privacy</a>
+          <a href="#" className="hover:text-white transition-colors">Terms</a>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const Layout = ({ children, onInstall, isInstallable }: { children: React.ReactNode, onInstall: () => void, isInstallable: boolean }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname;
@@ -1638,7 +2010,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     navigate("/");
   };
 
-  const isCheckoutOnly = pathname === "/" || pathname === "/payment-success" || pathname === "/payment-failed";
+  const isCheckoutOnly = pathname === "/" || pathname === "/payment-success" || pathname === "/payment-failed" || pathname === "/download";
   const isAdminLogin = pathname === "/admin/login";
 
   if (isCheckoutOnly || isAdminLogin) {
@@ -1686,7 +2058,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />
           <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />
           <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />
+          <SidebarItem icon={Code} label="Developer" active={pathname === '/admin/developer'} onClick={() => handleNavClick('/admin/developer')} />
           <SidebarItem icon={User} label="My Profile" active={pathname === '/admin/profile'} onClick={() => handleNavClick('/admin/profile')} />
+          <SidebarItem icon={Smartphone} label="Get App" active={pathname === '/download'} onClick={() => handleNavClick('/download')} />
           <SidebarItem icon={TrendingUp} label="Analytics" />
           <SidebarItem icon={Users} label="Customers" />
           <SidebarItem icon={ShieldCheck} label="Security" />
@@ -1711,6 +2085,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin' && "System Overview"}
               {pathname === '/admin/refunds' && "Refund Management"}
               {pathname === '/admin/transactions' && "Payment History"}
+              {pathname === '/admin/developer' && "Developer API"}
               {pathname === '/admin/settings' && "System Settings"}
               {pathname === '/admin/profile' && "My Profile"}
             </h2>
@@ -1739,18 +2114,63 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 };
 
 export default function App() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsStandalone(true);
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (isStandalone) {
+      toast.info("bKash Pay is already installed on your device.");
+      return;
+    }
+
+    if (!deferredPrompt) {
+      toast.error("Installation is not supported by this browser. Try opening in Chrome or Safari.");
+      return;
+    }
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setIsStandalone(true);
+      toast.success("Thank you for installing bKash Pay!");
+    }
+  };
+
   return (
     <BrowserRouter>
       <Toaster position="top-right" richColors theme="dark" />
-      <Layout>
+      <Layout onInstall={handleInstall} isInstallable={!!deferredPrompt && !isStandalone}>
         <Routes>
-          <Route path="/" element={<Checkout />} />
+          <Route path="/" element={<Checkout onInstall={handleInstall} isInstallable={!!deferredPrompt && !isStandalone} />} />
           <Route path="/admin" element={<Dashboard />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/refunds" element={<Refunds />} />
           <Route path="/admin/transactions" element={<Transactions />} />
+          <Route path="/admin/developer" element={<DeveloperDocs />} />
+          <Route path="/developer" element={<DeveloperDocs />} />
           <Route path="/admin/settings" element={<SettingsPage />} />
           <Route path="/admin/profile" element={<UserProfile />} />
+          <Route path="/download" element={<DownloadApp onInstall={handleInstall} isInstallable={!!deferredPrompt} isStandalone={isStandalone} />} />
           <Route path="/payment-success" element={<SuccessPage />} />
           <Route path="/payment-failed" element={<FailurePage />} />
         </Routes>
