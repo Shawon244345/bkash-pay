@@ -13,6 +13,24 @@ export default defineConfig(({mode}) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        workbox: {
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/ais-.*\.run\.app\/api\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            }
+          ]
+        },
         manifest: {
           name: 'bKash Pay',
           short_name: 'bKashPay',
