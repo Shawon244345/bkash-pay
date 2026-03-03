@@ -7,24 +7,24 @@ import path from "path";
 import dotenv from "dotenv";
 import fs from "fs";
 
-dotenv.config();
-
-const logToFile = (message: string, data: any) => {
-  const logEntry = `[${new Date().toISOString()}] ${message}: ${JSON.stringify(data, null, 2)}\n`;
-  fs.appendFileSync("debug.log", logEntry);
-};
-
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const logToFile = (message: string, data: any) => {
+  const logEntry = `[${new Date().toISOString()}] ${message}: ${JSON.stringify(data, null, 2)}\n`;
+  fs.appendFileSync(path.join(__dirname, "debug.log"), logEntry);
+};
+
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Database Setup
-const db = new Database("payments.db");
+const db = new Database(path.join(__dirname, "payments.db"));
 db.exec(`
   CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,

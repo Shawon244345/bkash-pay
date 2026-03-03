@@ -16,7 +16,7 @@ export default defineConfig(({mode}) => {
         workbox: {
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/ais-.*\.run\.app\/api\/.*/i,
+              urlPattern: /\/api\/.*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'api-cache',
