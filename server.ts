@@ -167,6 +167,13 @@ const getBkashHeaders = async () => {
 };
 
 // API Routes
+app.use((req, res, next) => {
+  if (req.url.endsWith('.js') || req.url.endsWith('.ts') || req.url.endsWith('.tsx')) {
+    res.type('application/javascript');
+  }
+  next();
+});
+
 app.post("/api/bkash/create-payment", async (req, res) => {
   try {
     const { amount, invoice } = req.body;
