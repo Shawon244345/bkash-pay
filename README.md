@@ -19,14 +19,14 @@ A full-featured, secure, and offline-ready bKash Payment Gateway system designed
    - **Node.js version**: Select `18.x`.
    - **Application mode**: `production`.
    - **Application root**: Path to your files (e.g., `bkash-pay`).
-   - **Application URL**: Your subdomain or domain.
+   - **Application URL**: `bkash.egoluck.com`
    - **Application startup file**: `server.js`.
 3. **Install Dependencies**:
    - Click **Run npm install** in the cPanel Node.js app interface.
 4. **Environment Variables**:
    - Add these variables in the cPanel interface:
      - `PORT`: `3000`
-     - `APP_URL`: `https://yourdomain.com`
+     - `APP_URL`: `https://bkash.egoluck.com`
      - `BKASH_APP_KEY`: Your bKash App Key
      - `BKASH_APP_SECRET`: Your bKash App Secret
      - `BKASH_USERNAME`: Your bKash Username
@@ -41,5 +41,17 @@ A full-featured, secure, and offline-ready bKash Payment Gateway system designed
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Framer Motion, Lucide Icons.
-- **Backend**: Node.js, Express, SQLite (better-sqlite3).
+- **Backend**: Node.js, Express, SQLite (sqlite3).
 - **Database**: SQLite (Zero configuration required).
+
+### 🛠 Troubleshooting (cPanel Errors)
+
+If you encounter errors like `GLIBC_2.29 not found` or `EBADENGINE` during `npm install`:
+
+1.  **Node.js Version**: Ensure you are using **Node.js 18 or 20** in the cPanel Node.js Selector.
+2.  **Clear Cache**:
+    *   Stop the application in cPanel.
+    *   Delete `node_modules` and `package-lock.json` from your file manager.
+    *   Remove any modules listed in the "Modules" section of the cPanel Node.js App setup (they should be installed via `package.json` instead).
+3.  **SQLite Issues**: If `sqlite3` still fails to install due to `GLIBC` versions, it means your server's operating system is too old for the prebuilt binaries. 
+    *   **Solution**: Contact your hosting provider to upgrade the OS, or ask them to install `sqlite3` globally for your Node.js version.

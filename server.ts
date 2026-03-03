@@ -1,6 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import sqlite3 from "sqlite3";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -15,124 +15,135 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const logToFile = (message: string, data: any, level: string = "INFO") => {
+// Database Setup
+const dbRaw = new sqlite3.Database(path.join(__dirname, "payments.db"));
+
+const db = {
+  run: (sql: string, ...params: any[]) => new Promise<void>((resolve, reject) => {
+    dbRaw.run(sql, params, (err) => err ? reject(err) : resolve());
+  }),
+  get: (sql: string, ...params: any[]) => new Promise<any>((resolve, reject) => {
+    dbRaw.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
+  }),
+  all: (sql: string, ...params: any[]) => new Promise<any[]>((resolve, reject) => {
+    dbRaw.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
+  }),
+  exec: (sql: string) => new Promise<void>((resolve, reject) => {
+    dbRaw.exec(sql, (err) => err ? reject(err) : resolve());
+  })
+};
+
+const logToFile = async (message: string, data: any, level: string = "INFO") => {
   const logEntry = `[${new Date().toISOString()}] ${message}: ${JSON.stringify(data, null, 2)}\n`;
   fs.appendFileSync(path.join(__dirname, "debug.log"), logEntry);
   
   try {
-    db.prepare("INSERT INTO logs (id, level, message, details) VALUES (?, ?, ?, ?)")
-      .run(uuidv4(), level, message, JSON.stringify(data));
+    await db.run("INSERT INTO logs (id, level, message, details) VALUES (?, ?, ?, ?)", uuidv4(), level, message, JSON.stringify(data));
   } catch (e) {
     console.error("Failed to write log to DB", e);
   }
 };
 
-const auditLog = (action: string, user: string, details: any) => {
+const auditLog = async (action: string, user: string, details: any) => {
   try {
-    db.prepare("INSERT INTO audit_logs (id, action, user, details) VALUES (?, ?, ?, ?)")
-      .run(uuidv4(), action, user, typeof details === 'string' ? details : JSON.stringify(details));
+    await db.run("INSERT INTO audit_logs (id, action, user, details) VALUES (?, ?, ?, ?)", uuidv4(), action, user, typeof details === 'string' ? details : JSON.stringify(details));
   } catch (e) {
     console.error("Failed to write audit log", e);
+  }
+};
+
+const initDb = async () => {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY,
+      payment_id TEXT,
+      trx_id TEXT,
+      amount REAL,
+      status TEXT,
+      customer_msisdn TEXT,
+      merchant_invoice TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS refunds (
+      id TEXT PRIMARY KEY,
+      refund_id TEXT,
+      original_trx_id TEXT,
+      original_payment_id TEXT,
+      amount REAL,
+      refund_amount REAL,
+      status TEXT,
+      reason TEXT,
+      sku TEXT,
+      refund_execution_time DATETIME,
+      response_data TEXT,
+      ip_address TEXT,
+      initiated_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS logs (
+      id TEXT PRIMARY KEY,
+      level TEXT,
+      message TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      action TEXT,
+      user TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Migration for refunds table to ensure all columns exist
+  try { await db.run("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME"); } catch (e) {}
+  try { await db.run("ALTER TABLE refunds ADD COLUMN ip_address TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE refunds ADD COLUMN initiated_by TEXT"); } catch (e) {}
+
+  // Seed default credentials if not present
+  const seedSettings = [
+    { key: 'BKASH_APP_KEY', value: 'cHDSQ3vX2eDv5ZMAPoPNPlnFtc' },
+    { key: 'BKASH_APP_SECRET', value: 'V1hSnG1vAsc79MSjyPUC4K0RdOqWyKv28tZPb1Uol8HSRCvwzF83' },
+    { key: 'BKASH_USERNAME', value: '01997473177' },
+    { key: 'BKASH_PASSWORD', value: 'V9^@JbA_$6x' },
+    { key: 'BKASH_BASE_URL', value: 'https://tokenized.pay.bka.sh/v1.2.0-beta' },
+    { key: 'APP_URL', value: process.env.APP_URL || "https://bkash.egoluck.com" },
+    { key: 'ADMIN_USERNAME', value: 'admin' },
+    { key: 'ADMIN_PASSWORD', value: 'admin123' }
+  ];
+
+  for (const s of seedSettings) {
+    await db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
   }
 };
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Database Setup
-const db = new Database(path.join(__dirname, "payments.db"));
-db.exec(`
-  CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY,
-    payment_id TEXT,
-    trx_id TEXT,
-    amount REAL,
-    status TEXT,
-    customer_msisdn TEXT,
-    merchant_invoice TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS refunds (
-    id TEXT PRIMARY KEY,
-    refund_id TEXT,
-    original_trx_id TEXT,
-    original_payment_id TEXT,
-    amount REAL,
-    refund_amount REAL,
-    status TEXT,
-    reason TEXT,
-    sku TEXT,
-    refund_execution_time DATETIME,
-    response_data TEXT,
-    ip_address TEXT,
-    initiated_by TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS logs (
-    id TEXT PRIMARY KEY,
-    level TEXT,
-    message TEXT,
-    details TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS audit_logs (
-    id TEXT PRIMARY KEY,
-    action TEXT,
-    user TEXT,
-    details TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-// Migration for refunds table to ensure all columns exist
-try {
-  db.prepare("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME").run();
-} catch (e) {}
-try {
-  db.prepare("ALTER TABLE refunds ADD COLUMN ip_address TEXT").run();
-} catch (e) {}
-try {
-  db.prepare("ALTER TABLE refunds ADD COLUMN initiated_by TEXT").run();
-} catch (e) {}
-
-// Seed default credentials if not present
-const seedSettings = [
-  { key: 'BKASH_APP_KEY', value: 'cHDSQ3vX2eDv5ZMAPoPNPlnFtc' },
-  { key: 'BKASH_APP_SECRET', value: 'V1hSnG1vAsc79MSjyPUC4K0RdOqWyKv28tZPb1Uol8HSRCvwzF83' },
-  { key: 'BKASH_USERNAME', value: '01997473177' },
-  { key: 'BKASH_PASSWORD', value: 'V9^@JbA_$6x' },
-  { key: 'BKASH_BASE_URL', value: 'https://tokenized.pay.bka.sh/v1.2.0-beta' },
-  { key: 'APP_URL', value: process.env.APP_URL || "" },
-  { key: 'ADMIN_USERNAME', value: 'admin' },
-  { key: 'ADMIN_PASSWORD', value: 'admin123' }
-];
-
-const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
-seedSettings.forEach(s => insertSetting.run(s.key, s.value));
-
 app.use(express.json());
 
 // bKash Helpers
-const getSetting = (key: string, defaultValue: string = "") => {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as any;
+const getSetting = async (key: string, defaultValue: string = "") => {
+  const row = await db.get("SELECT value FROM settings WHERE key = ?", key);
   return row ? row.value : (process.env[key] || defaultValue);
 };
 
 const getBkashHeaders = async () => {
-  const appKey = getSetting("BKASH_APP_KEY");
-  const appSecret = getSetting("BKASH_APP_SECRET");
-  const username = getSetting("BKASH_USERNAME");
-  const password = getSetting("BKASH_PASSWORD");
-  const baseUrl = getSetting("BKASH_BASE_URL");
+  const appKey = await getSetting("BKASH_APP_KEY");
+  const appSecret = await getSetting("BKASH_APP_SECRET");
+  const username = await getSetting("BKASH_USERNAME");
+  const password = await getSetting("BKASH_PASSWORD");
+  const baseUrl = await getSetting("BKASH_BASE_URL");
 
   const { data } = await axios.post(
     `${baseUrl}/tokenized/checkout/token/grant`,
@@ -147,7 +158,7 @@ const getBkashHeaders = async () => {
       },
     }
   );
-  logToFile("bKash Token Response", data);
+  await logToFile("bKash Token Response", data);
   return {
     "Content-Type": "application/json",
     Authorization: data.id_token,
@@ -160,8 +171,8 @@ app.post("/api/bkash/create-payment", async (req, res) => {
   try {
     const { amount, invoice } = req.body;
     const headers = await getBkashHeaders();
-    const baseUrl = getSetting("BKASH_BASE_URL");
-    const appUrl = getSetting("APP_URL");
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+    const appUrl = await getSetting("APP_URL");
     
     const { data } = await axios.post(
       `${baseUrl}/tokenized/checkout/create`,
@@ -178,11 +189,10 @@ app.post("/api/bkash/create-payment", async (req, res) => {
     );
 
     console.log("bKash Create Response:", data);
-    logToFile("bKash Create Response", data);
+    await logToFile("bKash Create Response", data);
 
     if (data.paymentID && data.bkashURL) {
-      db.prepare("INSERT INTO transactions (id, payment_id, amount, status, merchant_invoice) VALUES (?, ?, ?, ?, ?)")
-        .run(uuidv4(), data.paymentID, amount, "initiated", invoice);
+      await db.run("INSERT INTO transactions (id, payment_id, amount, status, merchant_invoice) VALUES (?, ?, ?, ?, ?)", uuidv4(), data.paymentID, amount, "initiated", invoice);
       
       res.json({ bkashURL: data.bkashURL });
     } else {
@@ -196,7 +206,7 @@ app.post("/api/bkash/create-payment", async (req, res) => {
 
 app.get("/api/bkash/callback", async (req, res) => {
   const { paymentID, status } = req.query;
-  logToFile("bKash Callback Received", { paymentID, status });
+  await logToFile("bKash Callback Received", { paymentID, status });
 
   if (!paymentID) {
     return res.redirect("/payment-failed?error=missing_payment_id");
@@ -205,7 +215,7 @@ app.get("/api/bkash/callback", async (req, res) => {
   if (status === "success") {
     try {
       const headers = await getBkashHeaders();
-      const baseUrl = getSetting("BKASH_BASE_URL");
+      const baseUrl = await getSetting("BKASH_BASE_URL");
       
       const { data } = await axios.post(
         `${baseUrl}/tokenized/checkout/execute`,
@@ -213,11 +223,10 @@ app.get("/api/bkash/callback", async (req, res) => {
         { headers }
       );
 
-      logToFile("bKash Execute Response", data);
+      await logToFile("bKash Execute Response", data);
 
       if (data.statusCode === "0000") {
-        db.prepare("UPDATE transactions SET status = ?, trx_id = ?, customer_msisdn = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
-          .run("completed", data.trxID, data.customerMsisdn, paymentID);
+        await db.run("UPDATE transactions SET status = ?, trx_id = ?, customer_msisdn = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?", "completed", data.trxID, data.customerMsisdn, paymentID);
         
         const params = new URLSearchParams({
           trxID: data.trxID,
@@ -228,59 +237,60 @@ app.get("/api/bkash/callback", async (req, res) => {
         });
         return res.redirect(`/payment-success?${params.toString()}`);
       } else {
-        db.prepare("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
-          .run("failed", paymentID);
+        await db.run("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?", "failed", paymentID);
         return res.redirect("/payment-failed?error=" + (data.statusMessage || "Execution failed"));
       }
     } catch (error: any) {
-      logToFile("bKash Execute Error", error.response?.data || error.message);
+      await logToFile("bKash Execute Error", error.response?.data || error.message);
       return res.redirect("/payment-failed?error=execution_api_error");
     }
   }
   
   // Handle cancel, failure, or other statuses
-  db.prepare("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?")
-    .run(status || "failed", paymentID);
+  await db.run("UPDATE transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?", status || "failed", paymentID);
     
   res.redirect("/payment-failed?status=" + (status || "unknown"));
 });
 
-app.post("/api/admin/login", (req, res) => {
+app.post("/api/admin/login", async (req, res) => {
   const { username, password } = req.body;
-  const dbUsername = getSetting("ADMIN_USERNAME");
-  const dbPassword = getSetting("ADMIN_PASSWORD");
+  const dbUsername = await getSetting("ADMIN_USERNAME");
+  const dbPassword = await getSetting("ADMIN_PASSWORD");
 
   if (username === dbUsername && password === dbPassword) {
-    auditLog("LOGIN_SUCCESS", username, "Admin logged in successfully");
+    await auditLog("LOGIN_SUCCESS", username, "Admin logged in successfully");
     res.json({ success: true });
   } else {
-    auditLog("LOGIN_FAILED", username, "Invalid login attempt");
+    await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
     res.status(401).json({ error: "Invalid credentials" });
   }
 });
 
-app.post("/api/admin/update-credentials", (req, res) => {
+app.post("/api/admin/update-credentials", async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
 
-  const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
-  
-  db.transaction(() => {
-    stmt.run("ADMIN_USERNAME", username);
-    stmt.run("ADMIN_PASSWORD", password);
-  })();
-  
-  auditLog("CREDENTIALS_UPDATE", username, "Admin credentials updated");
-  res.json({ message: "Credentials updated successfully" });
+  try {
+    await db.exec("BEGIN TRANSACTION");
+    await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "ADMIN_USERNAME", username);
+    await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "ADMIN_PASSWORD", password);
+    await db.exec("COMMIT");
+    
+    await auditLog("CREDENTIALS_UPDATE", username, "Admin credentials updated");
+    res.json({ message: "Credentials updated successfully" });
+  } catch (e) {
+    await db.exec("ROLLBACK");
+    res.status(500).json({ error: "Failed to update credentials" });
+  }
 });
 
-app.get("/api/admin/stats", (req, res) => {
-  const totalVolume = db.prepare("SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'").get() as any;
-  const successCount = db.prepare("SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'").get() as any;
-  const recentTransactions = db.prepare("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10").all();
+app.get("/api/admin/stats", async (req, res) => {
+  const totalVolume = await db.get("SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'");
+  const successCount = await db.get("SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'");
+  const recentTransactions = await db.all("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10");
   
   res.json({
     totalVolume: totalVolume?.total || 0,
@@ -289,7 +299,7 @@ app.get("/api/admin/stats", (req, res) => {
   });
 });
 
-app.get("/api/admin/transactions", (req, res) => {
+app.get("/api/admin/transactions", async (req, res) => {
   const { start_date, end_date, search } = req.query;
   let query = "SELECT * FROM transactions WHERE 1=1";
   const params: any[] = [];
@@ -309,31 +319,35 @@ app.get("/api/admin/transactions", (req, res) => {
   }
 
   query += " ORDER BY created_at DESC";
-  const transactions = db.prepare(query).all(...params);
+  const transactions = await db.all(query, ...params);
   res.json(transactions);
 });
 
-app.get("/api/admin/settings", (req, res) => {
+app.get("/api/admin/settings", async (req, res) => {
   const keys = ["BKASH_APP_KEY", "BKASH_APP_SECRET", "BKASH_USERNAME", "BKASH_PASSWORD", "BKASH_BASE_URL", "APP_URL"];
   const settings: any = {};
-  keys.forEach(key => {
-    settings[key] = getSetting(key);
-  });
+  for (const key of keys) {
+    settings[key] = await getSetting(key);
+  }
   res.json(settings);
 });
 
-app.post("/api/admin/settings", (req, res) => {
+app.post("/api/admin/settings", async (req, res) => {
   const settings = req.body;
-  const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
   
-  db.transaction(() => {
+  try {
+    await db.exec("BEGIN TRANSACTION");
     for (const [key, value] of Object.entries(settings)) {
-      stmt.run(key, value);
+      await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value);
     }
-  })();
-  
-  auditLog("SETTINGS_UPDATE", "admin", "System settings updated");
-  res.json({ message: "Settings updated successfully" });
+    await db.exec("COMMIT");
+    
+    await auditLog("SETTINGS_UPDATE", "admin", "System settings updated");
+    res.json({ message: "Settings updated successfully" });
+  } catch (e) {
+    await db.exec("ROLLBACK");
+    res.status(500).json({ error: "Failed to update settings" });
+  }
 });
 
 app.post("/api/bkash/refund", async (req, res) => {
@@ -343,13 +357,13 @@ app.post("/api/bkash/refund", async (req, res) => {
     const initiated_by = "admin"; // In a real app, this would come from session
     
     // Check if already refunded
-    const existing = db.prepare("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'").get(trxID);
+    const existing = await db.get("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'", trxID);
     if (existing) {
       return res.status(400).json({ error: "This transaction has already been refunded" });
     }
 
     const headers = await getBkashHeaders();
-    const baseUrl = getSetting("BKASH_BASE_URL");
+    const baseUrl = await getSetting("BKASH_BASE_URL");
     
     let responseData;
     try {
@@ -367,17 +381,17 @@ app.post("/api/bkash/refund", async (req, res) => {
       responseData = data;
     } catch (apiError: any) {
       responseData = apiError.response?.data || { statusMessage: apiError.message };
-      logToFile("bKash Refund API Error", responseData);
+      await logToFile("bKash Refund API Error", responseData);
     }
 
     const status = responseData.refundTrxID ? "COMPLETED" : "FAILED";
     const refundID = responseData.refundTrxID || `FAIL-${uuidv4().slice(0, 8)}`;
     const executionTime = responseData.completedTime || null;
 
-    db.prepare(`
+    await db.run(`
       INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, refund_execution_time, response_data, ip_address, initiated_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `,
       uuidv4(),
       refundID,
       trxID,
@@ -395,11 +409,11 @@ app.post("/api/bkash/refund", async (req, res) => {
 
     if (status === "COMPLETED") {
       // Update original transaction status to refunded
-      db.prepare("UPDATE transactions SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE trx_id = ?").run(trxID);
-      auditLog("REFUND_SUCCESS", initiated_by, { trxID, amount, refundID });
+      await db.run("UPDATE transactions SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE trx_id = ?", trxID);
+      await auditLog("REFUND_SUCCESS", initiated_by, { trxID, amount, refundID });
       res.json({ message: "Refund processed successfully", refundID });
     } else {
-      auditLog("REFUND_FAILED", initiated_by, { trxID, amount, error: responseData.statusMessage });
+      await auditLog("REFUND_FAILED", initiated_by, { trxID, amount, error: responseData.statusMessage });
       res.status(400).json({ error: responseData.statusMessage || "Refund failed" });
     }
   } catch (error: any) {
@@ -408,13 +422,13 @@ app.post("/api/bkash/refund", async (req, res) => {
   }
 });
 
-app.get("/api/admin/logs", (req, res) => {
-  const logs = db.prepare("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100").all();
+app.get("/api/admin/logs", async (req, res) => {
+  const logs = await db.all("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100");
   res.json(logs);
 });
 
-app.get("/api/admin/audit-logs", (req, res) => {
-  const logs = db.prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100").all();
+app.get("/api/admin/audit-logs", async (req, res) => {
+  const logs = await db.all("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100");
   res.json(logs);
 });
 
@@ -427,14 +441,16 @@ app.post("/api/admin/test-bkash", async (req, res) => {
   }
 });
 
-app.get("/api/admin/transaction-search", (req, res) => {
+app.get("/api/admin/transaction-search", async (req, res) => {
   const { trx_id } = req.query;
-  const transaction = db.prepare("SELECT * FROM transactions WHERE trx_id = ?").get(trx_id);
+  const transaction = await db.get("SELECT * FROM transactions WHERE trx_id = ?", trx_id);
   res.json(transaction || null);
 });
 
 // Vite Middleware
 async function startServer() {
+  await initDb();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
