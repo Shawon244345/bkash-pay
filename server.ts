@@ -15,9 +15,25 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const logToFile = (message: string, data: any) => {
+const logToFile = (message: string, data: any, level: string = "INFO") => {
   const logEntry = `[${new Date().toISOString()}] ${message}: ${JSON.stringify(data, null, 2)}\n`;
   fs.appendFileSync(path.join(__dirname, "debug.log"), logEntry);
+  
+  try {
+    db.prepare("INSERT INTO logs (id, level, message, details) VALUES (?, ?, ?, ?)")
+      .run(uuidv4(), level, message, JSON.stringify(data));
+  } catch (e) {
+    console.error("Failed to write log to DB", e);
+  }
+};
+
+const auditLog = (action: string, user: string, details: any) => {
+  try {
+    db.prepare("INSERT INTO audit_logs (id, action, user, details) VALUES (?, ?, ?, ?)")
+      .run(uuidv4(), action, user, typeof details === 'string' ? details : JSON.stringify(details));
+  } catch (e) {
+    console.error("Failed to write audit log", e);
+  }
 };
 
 const app = express();
@@ -64,6 +80,14 @@ db.exec(`
     id TEXT PRIMARY KEY,
     level TEXT,
     message TEXT,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    action TEXT,
+    user TEXT,
     details TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -227,8 +251,10 @@ app.post("/api/admin/login", (req, res) => {
   const dbPassword = getSetting("ADMIN_PASSWORD");
 
   if (username === dbUsername && password === dbPassword) {
+    auditLog("LOGIN_SUCCESS", username, "Admin logged in successfully");
     res.json({ success: true });
   } else {
+    auditLog("LOGIN_FAILED", username, "Invalid login attempt");
     res.status(401).json({ error: "Invalid credentials" });
   }
 });
@@ -247,6 +273,7 @@ app.post("/api/admin/update-credentials", (req, res) => {
     stmt.run("ADMIN_PASSWORD", password);
   })();
   
+  auditLog("CREDENTIALS_UPDATE", username, "Admin credentials updated");
   res.json({ message: "Credentials updated successfully" });
 });
 
@@ -305,6 +332,7 @@ app.post("/api/admin/settings", (req, res) => {
     }
   })();
   
+  auditLog("SETTINGS_UPDATE", "admin", "System settings updated");
   res.json({ message: "Settings updated successfully" });
 });
 
@@ -368,8 +396,10 @@ app.post("/api/bkash/refund", async (req, res) => {
     if (status === "COMPLETED") {
       // Update original transaction status to refunded
       db.prepare("UPDATE transactions SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE trx_id = ?").run(trxID);
+      auditLog("REFUND_SUCCESS", initiated_by, { trxID, amount, refundID });
       res.json({ message: "Refund processed successfully", refundID });
     } else {
+      auditLog("REFUND_FAILED", initiated_by, { trxID, amount, error: responseData.statusMessage });
       res.status(400).json({ error: responseData.statusMessage || "Refund failed" });
     }
   } catch (error: any) {
@@ -378,9 +408,23 @@ app.post("/api/bkash/refund", async (req, res) => {
   }
 });
 
-app.get("/api/admin/refunds", (req, res) => {
-  const refunds = db.prepare("SELECT * FROM refunds ORDER BY created_at DESC").all();
-  res.json(refunds);
+app.get("/api/admin/logs", (req, res) => {
+  const logs = db.prepare("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100").all();
+  res.json(logs);
+});
+
+app.get("/api/admin/audit-logs", (req, res) => {
+  const logs = db.prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100").all();
+  res.json(logs);
+});
+
+app.post("/api/admin/test-bkash", async (req, res) => {
+  try {
+    const headers = await getBkashHeaders();
+    res.json({ success: true, message: "Connection successful", token: headers.Authorization.substring(0, 10) + "..." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.response?.data || error.message });
+  }
 });
 
 app.get("/api/admin/transaction-search", (req, res) => {

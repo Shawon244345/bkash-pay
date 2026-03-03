@@ -28,7 +28,10 @@ import {
   Menu,
   X,
   RotateCcw,
-  Info
+  Info,
+  Terminal,
+  Activity,
+  Zap
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -844,11 +847,127 @@ const Transactions = () => {
   );
 };
 
+const LogsPage = () => {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/logs")
+      .then(res => res.json())
+      .then(setLogs)
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Terminal size={20} className="text-bkash" />
+            System Debug Logs
+          </h3>
+          <button onClick={() => window.location.reload()} className="text-xs text-zinc-500 hover:text-white transition-colors">Refresh</button>
+        </div>
+        <div className="p-4 bg-black/50 font-mono text-xs space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
+          {loading ? (
+            <div className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></div>
+          ) : logs.length === 0 ? (
+            <div className="py-12 text-center text-zinc-600">No logs found</div>
+          ) : logs.map((log, i) => (
+            <div key={i} className="border-b border-zinc-800/50 pb-2 last:border-0">
+              <div className="flex gap-4 text-zinc-500 mb-1">
+                <span className="text-bkash font-bold">[{log.level || 'INFO'}]</span>
+                <span>{new Date(log.created_at).toLocaleString()}</span>
+              </div>
+              <p className="text-zinc-300">{log.message}</p>
+              {log.details && (
+                <pre className="mt-1 text-[10px] text-zinc-600 overflow-x-auto">
+                  {log.details}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const AuditLogsPage = () => {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/audit-logs")
+      .then(res => res.json())
+      .then(setLogs)
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-zinc-800">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Activity size={20} className="text-bkash" />
+            Security Audit Trail
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-zinc-800/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+              <tr>
+                <th className="py-4 px-6 font-black">Timestamp</th>
+                <th className="py-4 px-6 font-black">Action</th>
+                <th className="py-4 px-6 font-black">User</th>
+                <th className="py-4 px-6 font-black">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></td></tr>
+              ) : logs.map((log, i) => (
+                <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                  <td className="py-4 px-6 text-xs text-zinc-500">{new Date(log.created_at).toLocaleString()}</td>
+                  <td className="py-4 px-6"><span className="px-2 py-1 bg-bkash/10 text-bkash rounded text-[10px] font-bold uppercase">{log.action}</span></td>
+                  <td className="py-4 px-6 text-sm font-medium">{log.user}</td>
+                  <td className="py-4 px-6 text-xs text-zinc-400">{log.details}</td>
+                </tr>
+              ))}
+              {!loading && logs.length === 0 && (
+                <tr><td colSpan={4} className="py-12 text-center text-zinc-600">No audit logs recorded</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const isOnline = useOnlineStatus();
+
+  const testConnection = async () => {
+    setIsTesting(true);
+    try {
+      const res = await fetch("/api/admin/test-bkash", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.error?.statusMessage || "Connection failed");
+      }
+    } catch (err) {
+      toast.error("Failed to reach server");
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -967,6 +1086,15 @@ const SettingsPage = () => {
                     <strong>Security Note:</strong> These credentials are encrypted at rest and only used for server-side bKash API calls. Never share your App Secret or Password.
                   </p>
                 </div>
+                <button 
+                  type="button"
+                  onClick={testConnection}
+                  disabled={isTesting || !isOnline}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                >
+                  {isTesting ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} className="text-amber-500" />}
+                  Test bKash Connection
+                </button>
               </div>
             </div>
           </div>
@@ -1831,6 +1959,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />
           <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />
           <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />
+          <SidebarItem icon={Terminal} label="System Logs" active={pathname === '/admin/logs'} onClick={() => handleNavClick('/admin/logs')} />
+          <SidebarItem icon={Activity} label="Audit Trail" active={pathname === '/admin/audit-logs'} onClick={() => handleNavClick('/admin/audit-logs')} />
           <SidebarItem icon={User} label="My Profile" active={pathname === '/admin/profile'} onClick={() => handleNavClick('/admin/profile')} />
           <SidebarItem icon={TrendingUp} label="Analytics" />
           <SidebarItem icon={Users} label="Customers" />
@@ -1858,6 +1988,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin/transactions' && "Payment History"}
               {pathname === '/admin/settings' && "System Settings"}
               {pathname === '/admin/profile' && "My Profile"}
+              {pathname === '/admin/logs' && "System Logs"}
+              {pathname === '/admin/audit-logs' && "Audit Trail"}
             </h2>
             <p className="text-zinc-500 mt-1">Welcome back, {localStorage.getItem("userName") || "Administrator"}</p>
           </div>
@@ -1896,6 +2028,8 @@ export default function App() {
           <Route path="/admin/transactions" element={<Transactions />} />
           <Route path="/admin/settings" element={<SettingsPage />} />
           <Route path="/admin/profile" element={<UserProfile />} />
+          <Route path="/admin/logs" element={<LogsPage />} />
+          <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
           <Route path="/payment-success" element={<SuccessPage />} />
           <Route path="/payment-failed" element={<FailurePage />} />
         </Routes>
