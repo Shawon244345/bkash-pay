@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import dotenv from "dotenv";
 import fs from "fs";
+import multer from "multer";
 
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -103,7 +104,22 @@ const initDb = async () => {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE,
+      email TEXT,
+      password TEXT,
+      role TEXT,
+      permissions TEXT,
+      avatar TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  // Migration for users table to ensure all columns exist
+  try { await db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch (e) {}
 
   // Migration for refunds table to ensure all columns exist
   try { await db.run("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME"); } catch (e) {}
@@ -125,12 +141,48 @@ const initDb = async () => {
   for (const s of seedSettings) {
     await db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
   }
+
+  // Seed default admin user
+  const adminUsername = await getSetting("ADMIN_USERNAME", "admin");
+  const adminPassword = await getSetting("ADMIN_PASSWORD", "admin123");
+  const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements";
+  
+  await db.run(
+    "INSERT OR IGNORE INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
+    uuidv4(),
+    adminUsername,
+    "admin@bkash-pay.com",
+    adminPassword,
+    "admin",
+    allPermissions
+  );
 };
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+// Multer Setup for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+
 app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // bKash Helpers
 const getSetting = async (key: string, defaultValue: string = "") => {
@@ -261,15 +313,46 @@ app.get("/api/bkash/callback", async (req, res) => {
 
 app.post("/api/admin/login", async (req, res) => {
   const { username, password } = req.body;
-  const dbUsername = await getSetting("ADMIN_USERNAME");
-  const dbPassword = await getSetting("ADMIN_PASSWORD");
+  
+  try {
+    const user = await db.get("SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?", username, username, password);
 
-  if (username === dbUsername && password === dbPassword) {
-    await auditLog("LOGIN_SUCCESS", username, "Admin logged in successfully");
-    res.json({ success: true });
-  } else {
-    await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
-    res.status(401).json({ error: "Invalid credentials" });
+    if (user) {
+      await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
+      res.json({ 
+        success: true, 
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          permissions: user.permissions.split(",")
+        }
+      });
+    } else {
+      await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/admin/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await db.get("SELECT * FROM users WHERE email = ?", email);
+    if (user) {
+      // In a real app, send email. Here we just return success.
+      await auditLog("FORGOT_PASSWORD_REQUEST", email, "Password reset requested");
+      res.json({ message: "Password reset instructions sent to your email." });
+    } else {
+      res.status(404).json({ error: "Email not found" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -429,6 +512,122 @@ app.post("/api/bkash/refund", async (req, res) => {
   }
 });
 
+app.post("/api/bkash/search-transaction", async (req, res) => {
+  try {
+    const { trxID } = req.body;
+    if (!trxID) {
+      return res.status(400).json({ error: "trxID is required" });
+    }
+
+    const headers = await getBkashHeaders();
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/general/searchTransaction`,
+      { trxID },
+      { headers }
+    );
+
+    await logToFile("bKash Search Transaction Response", data);
+    res.json(data);
+  } catch (error: any) {
+    console.error("bKash Search Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/admin/analytics", async (req, res) => {
+  try {
+    const last7Days = await db.all(`
+      SELECT DATE(created_at) as date, SUM(amount) as total, COUNT(*) as count 
+      FROM transactions 
+      WHERE status = 'completed' AND created_at >= date('now', '-7 days')
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    const statusDistribution = await db.all(`
+      SELECT status, COUNT(*) as count 
+      FROM transactions 
+      GROUP BY status
+    `);
+
+    const hourlyVolume = await db.all(`
+      SELECT STRFTIME('%H', created_at) as hour, SUM(amount) as total
+      FROM transactions
+      WHERE status = 'completed'
+      GROUP BY hour
+      ORDER BY hour ASC
+    `);
+
+    res.json({ last7Days, statusDistribution, hourlyVolume });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+app.get("/api/admin/customers", async (req, res) => {
+  try {
+    const customers = await db.all(`
+      SELECT 
+        customer_msisdn as msisdn, 
+        COUNT(*) as total_transactions, 
+        SUM(amount) as total_spent,
+        MAX(created_at) as last_transaction
+      FROM transactions 
+      WHERE status = 'completed' AND customer_msisdn IS NOT NULL
+      GROUP BY customer_msisdn
+      ORDER BY total_spent DESC
+    `);
+    res.json(customers);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch customers" });
+  }
+});
+
+app.get("/api/admin/statement", async (req, res) => {
+  const { from, to } = req.query;
+  try {
+    const transactions = await db.all(`
+      SELECT * FROM transactions 
+      WHERE status = 'completed' 
+      AND DATE(created_at) >= DATE(?) 
+      AND DATE(created_at) <= DATE(?)
+      ORDER BY created_at ASC
+    `, from, to);
+    res.json(transactions);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to generate statement" });
+  }
+});
+
+app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    await db.run("UPDATE users SET avatar = ? WHERE id = ?", avatarUrl, userId);
+    res.json({ success: true, url: avatarUrl });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to upload avatar" });
+  }
+});
+
+app.post("/api/admin/settings/upload-logo", upload.single("logo"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const logoUrl = `/uploads/${req.file.filename}`;
+    await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "SITE_LOGO", logoUrl);
+    res.json({ success: true, url: logoUrl });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to upload logo" });
+  }
+});
+
 app.get("/api/admin/logs", async (req, res) => {
   const logs = await db.all("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100");
   res.json(logs);
@@ -452,6 +651,68 @@ app.get("/api/admin/transaction-search", async (req, res) => {
   const { trx_id } = req.query;
   const transaction = await db.get("SELECT * FROM transactions WHERE trx_id = ?", trx_id);
   res.json(transaction || null);
+});
+
+// User Management Routes
+app.get("/api/admin/users", async (req, res) => {
+  try {
+    const users = await db.all("SELECT id, username, role, permissions, created_at FROM users");
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.post("/api/admin/users", async (req, res) => {
+  const { username, email, password, role, permissions } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+  try {
+    const id = uuidv4();
+    await db.run(
+      "INSERT INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
+      id, username, email, password, role, permissions.join(",")
+    );
+    await auditLog("USER_CREATED", "admin", { username, role });
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+app.put("/api/admin/users/:id", async (req, res) => {
+  const { id } = req.params;
+  const { username, email, password, role, permissions } = req.body;
+  try {
+    if (password) {
+      await db.run(
+        "UPDATE users SET username = ?, email = ?, password = ?, role = ?, permissions = ? WHERE id = ?",
+        username, email, password, role, permissions.join(","), id
+      );
+    } else {
+      await db.run(
+        "UPDATE users SET username = ?, email = ?, role = ?, permissions = ? WHERE id = ?",
+        username, email, role, permissions.join(","), id
+      );
+    }
+    await auditLog("USER_UPDATED", "admin", { username, role });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+app.delete("/api/admin/users/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await db.get("SELECT username FROM users WHERE id = ?", id);
+    await db.run("DELETE FROM users WHERE id = ?", id);
+    await auditLog("USER_DELETED", "admin", { username: user?.username });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete user" });
+  }
 });
 
 // Vite Middleware

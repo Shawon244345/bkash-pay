@@ -7,11 +7,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        bkash: {
-          pink: '#e2136e',
-          light: '#f5f5f5',
-          dark: '#333333',
-        }
+        bkash: '#E2136E',
+        'bkash-dark': '#333333',
+        'bkash-light': '#F5F5F5',
       }
     },
   },

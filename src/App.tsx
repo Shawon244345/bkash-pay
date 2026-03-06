@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo, createContext, useContext } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useSearchParams, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -31,7 +31,31 @@ import {
   Info,
   Terminal,
   Activity,
-  Zap
+  Zap,
+  UserPlus,
+  Edit,
+  Trash2,
+  Camera,
+  Upload,
+  Palette,
+  Monitor,
+  Image,
+  FileText,
+  Calendar,
+  Filter,
+  RefreshCcw,
+  MoreVertical,
+  ChevronDown,
+  Lock,
+  Mail,
+  Phone,
+  Eye,
+  EyeOff,
+  TrendingDown,
+  DollarSign,
+  PieChart as PieChartIcon,
+  BarChart3,
+  Clock
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -43,11 +67,120 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  BarChart,
+  Bar,
+  Legend
 } from "recharts";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
 import { cn, formatCurrency } from "./lib/utils";
 import { Toaster, toast } from "sonner";
 import { saveTransactions, getLocalTransactions, queueAction, getSyncQueue, removeSyncAction } from "./db";
+
+// --- Theme Management ---
+const ThemeContext = React.createContext({
+  theme: 'dark',
+  setTheme: (theme: string) => {}
+});
+
+const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system');
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(theme);
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+const useTheme = () => useContext(ThemeContext);
+
+// --- PDF Generation ---
+const generateReceipt = (data: any) => {
+  const doc = new jsPDF();
+  const logoUrl = localStorage.getItem('siteLogo') || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s';
+  
+  // Header
+  doc.setFillColor(226, 19, 110); // bKash Pink
+  doc.rect(0, 0, 210, 40, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.text("Payment Receipt", 105, 25, { align: "center" });
+  
+  // Content
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  
+  const startY = 60;
+  const lineGap = 10;
+  
+  doc.text(`Transaction ID: ${data.trxID}`, 20, startY);
+  doc.text(`Amount: BDT ${data.amount}`, 20, startY + lineGap);
+  doc.text(`Customer: ${data.customer}`, 20, startY + lineGap * 2);
+  doc.text(`Invoice: ${data.invoice}`, 20, startY + lineGap * 3);
+  doc.text(`Date: ${new Date(data.time).toLocaleString()}`, 20, startY + lineGap * 4);
+  doc.text(`Status: Completed`, 20, startY + lineGap * 5);
+  
+  // Footer
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, 150, 190, 150);
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text("Thank you for using bKash Enterprise Payment Gateway", 105, 160, { align: "center" });
+  doc.text("This is an electronically generated receipt.", 105, 165, { align: "center" });
+  
+  doc.save(`Receipt-${data.trxID}.pdf`);
+};
+
+const generateStatementPDF = (transactions: any[], from: string, to: string) => {
+  const doc = new jsPDF();
+  
+  doc.setFillColor(226, 19, 110);
+  doc.rect(0, 0, 210, 30, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.text("Transaction Statement", 105, 20, { align: "center" });
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.text(`Period: ${from} to ${to}`, 14, 40);
+  
+  const tableData = transactions.map(t => [
+    new Date(t.created_at).toLocaleDateString(),
+    t.trx_id,
+    t.customer_msisdn,
+    t.merchant_invoice,
+    `BDT ${t.amount.toFixed(2)}`
+  ]);
+  
+  (doc as any).autoTable({
+    startY: 45,
+    head: [['Date', 'Trx ID', 'Customer', 'Invoice', 'Amount']],
+    body: tableData,
+    headStyles: { fillColor: [226, 19, 110] },
+    alternateRowStyles: { fillColor: [245, 245, 245] }
+  });
+  
+  doc.save(`Statement-${from}-to-${to}.pdf`);
+};
 
 // --- Types ---
 interface Transaction {
@@ -93,7 +226,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
       active 
         ? "bg-bkash/10 text-bkash" 
-        : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+        : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-bkash-dark hover:text-zinc-900 dark:hover:text-white"
     )}
   >
     <Icon size={20} className={cn("transition-transform duration-200", active ? "scale-110" : "group-hover:scale-110")} />
@@ -106,25 +239,29 @@ const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   <motion.div 
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl backdrop-blur-sm"
+    className="bg-white dark:bg-bkash-dark/50 border border-zinc-200 dark:border-bkash-dark p-6 rounded-3xl backdrop-blur-sm shadow-sm dark:shadow-none"
   >
     <div className="flex justify-between items-start mb-4">
-      <div className={cn("p-3 rounded-xl", color)}>
-        <Icon size={24} className="text-white" />
+      <div className={cn("p-3 rounded-2xl", color || "bg-bkash/10 text-bkash")}>
+        <Icon size={24} className={color ? "text-white" : ""} />
       </div>
       {trend && (
-        <span className={cn("text-xs font-medium px-2 py-1 rounded-full", trend > 0 ? "bg-bkash/10 text-bkash" : "bg-rose-500/10 text-rose-500")}>
-          {trend > 0 ? "+" : ""}{trend}%
-        </span>
+        <div className={cn(
+          "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
+          trend > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+        )}>
+          {trend > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+          {Math.abs(trend)}%
+        </div>
       )}
     </div>
-    <h3 className="text-zinc-400 text-sm font-medium mb-1">{title}</h3>
-    <p className="text-2xl font-bold text-white">{value}</p>
+    <h4 className="text-zinc-500 dark:text-zinc-400 text-xs font-black uppercase tracking-widest mb-1">{title}</h4>
+    <p className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white">{value}</p>
   </motion.div>
 );
 
 const TransactionRow = ({ tx }: { tx: Transaction, key?: string }) => (
-  <tr className="group border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+  <tr className="group border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
     <td className="py-4 px-4">
       <div className="flex flex-col">
         <span className="text-white font-medium text-sm">{tx.merchant_invoice || "N/A"}</span>
@@ -192,7 +329,7 @@ const Dashboard = () => {
       animate={{ opacity: 1, x: 0 }}
       className="space-y-8"
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard title="Total Volume" value={formatCurrency(stats?.totalVolume || 0)} icon={TrendingUp} trend={12.5} color="bg-bkash" />
         <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-rose-600" />
         <StatCard title="Active Agreements" value="1,284" icon={Users} trend={-2.4} color="bg-pink-600" />
@@ -200,7 +337,7 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+        <div className="lg:col-span-2 bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
           <h3 className="font-bold text-lg mb-6">Revenue Growth</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -223,7 +360,7 @@ const Dashboard = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+        <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
           <h3 className="font-bold text-lg mb-6">Payment Methods</h3>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -238,14 +375,14 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-bkash-dark flex justify-between items-center">
           <h3 className="font-bold text-lg">Recent Transactions</h3>
           <Link to="/admin/transactions" className="text-bkash text-sm font-medium hover:underline flex items-center gap-1">View all <ChevronRight size={16} /></Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-zinc-800/50 text-zinc-500 text-xs uppercase tracking-wider">
+            <thead className="bg-bkash-dark/50 text-zinc-500 text-xs uppercase tracking-wider">
               <tr>
                 <th className="py-3 px-4 font-semibold">Invoice / ID</th>
                 <th className="py-3 px-4 font-semibold">Customer</th>
@@ -317,37 +454,37 @@ const Checkout = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-2xl">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
-          <div className="bg-bkash p-8 text-white flex justify-between items-center">
+        <div className="bg-bkash-dark border border-bkash-dark rounded-3xl overflow-hidden shadow-2xl">
+          <div className="bg-bkash p-6 md:p-8 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-2">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl flex items-center justify-center p-2 shrink-0">
                 <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h3 className="text-2xl font-bold">Secure Checkout</h3>
-                <p className="opacity-80 mt-1">Enterprise Payment Gateway</p>
+                <h3 className="text-xl md:text-2xl font-bold">Secure Checkout</h3>
+                <p className="opacity-80 text-xs md:text-sm mt-0.5">Enterprise Payment Gateway</p>
               </div>
             </div>
             <Link 
               to="/admin/login" 
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+              className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-2"
             >
               <ShieldCheck size={18} /> Admin Panel
             </Link>
           </div>
-          <div className="p-8 space-y-8">
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-zinc-400">Payment Amount (BDT)</label>
+          <div className="p-6 md:p-8 space-y-6 md:space-y-8">
+            <div className="space-y-3 md:space-y-4">
+              <label className="block text-xs md:text-sm font-medium text-zinc-400">Payment Amount (BDT)</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-zinc-500">৳</span>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-zinc-800 border-2 border-zinc-700 rounded-2xl py-4 pl-10 pr-4 text-3xl font-bold text-white focus:border-bkash focus:outline-none transition-all" />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl md:text-2xl font-bold text-zinc-500">৳</span>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-bkash-dark/50 border-2 border-bkash-dark rounded-2xl py-3 md:py-4 pl-10 pr-4 text-2xl md:text-3xl font-bold text-white focus:border-bkash focus:outline-none transition-all" />
               </div>
             </div>
             <button 
               onClick={handleCheckout} 
               disabled={isProcessing || !isOnline} 
               className={cn(
-                "w-full font-bold py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 text-lg",
+                "w-full font-bold py-4 md:py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 text-base md:text-lg",
                 isOnline 
                   ? "bg-bkash hover:bg-bkash/90 text-white shadow-bkash/20" 
                   : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
@@ -406,41 +543,41 @@ const SuccessPage = () => {
       animate={{ opacity: 1, scale: 1 }} 
       className="max-w-lg mx-auto pt-8"
     >
-      <div className="bg-zinc-900 border border-zinc-800 rounded-[2rem] overflow-hidden shadow-2xl shadow-bkash/10">
-        <div className="bg-bkash p-10 text-center relative overflow-hidden">
+      <div className="bg-bkash-dark border border-bkash-dark rounded-[2rem] overflow-hidden shadow-2xl shadow-bkash/10">
+        <div className="bg-bkash p-6 md:p-10 text-center relative overflow-hidden">
           <div className="absolute inset-0 bg-black/10" />
           <motion.div 
             initial={{ scale: 0 }} 
             animate={{ scale: 1 }} 
             transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
-            className="relative z-10 w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl"
+            className="relative z-10 w-16 h-16 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl"
           >
-            <CheckCircle2 size={48} className="text-bkash" />
+            <CheckCircle2 size={40} className="text-bkash" />
           </motion.div>
-          <h2 className="relative z-10 text-2xl font-black text-white">Payment Successful</h2>
+          <h2 className="relative z-10 text-xl md:text-2xl font-black text-white">Payment Successful</h2>
         </div>
         
-        <div className="p-8 md:p-12 space-y-8">
+        <div className="p-6 md:p-12 space-y-6 md:space-y-8">
           <div className="text-center">
-            <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mb-2">Amount Paid</p>
-            <h3 className="text-5xl font-black text-white">
+            <p className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2">Amount Paid</p>
+            <h3 className="text-3xl md:text-5xl font-black text-white">
               <span className="text-bkash mr-2">৳</span>
               {parseFloat(amount || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </h3>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-zinc-800">
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Transaction ID</span>
-              <span className="font-mono font-bold text-zinc-200">{trxID}</span>
+          <div className="space-y-4 pt-4 border-t border-bkash-dark">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+              <span className="text-zinc-500 font-medium text-sm">Transaction ID</span>
+              <span className="font-mono font-bold text-zinc-200 text-sm break-all">{trxID}</span>
             </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Date & Time</span>
-              <span className="font-bold text-zinc-200">{formattedTime}</span>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+              <span className="text-zinc-500 font-medium text-sm">Date & Time</span>
+              <span className="font-bold text-zinc-200 text-sm">{formattedTime}</span>
             </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Customer</span>
-              <span className="font-bold text-zinc-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+              <span className="text-zinc-500 font-medium text-sm">Customer</span>
+              <span className="font-bold text-zinc-200 text-sm">
                 {customer ? `Customer ${customer.slice(-4)}` : 'N/A'}
               </span>
             </div>
@@ -460,12 +597,15 @@ const SuccessPage = () => {
 
           <div className="pt-6 flex gap-4">
             <Link 
-              to="/checkout" 
+              to="/" 
               className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               <ArrowLeft size={18} /> Pay Again
             </Link>
-            <button className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 text-white shadow-lg shadow-bkash/20">
+            <button 
+              onClick={() => generateReceipt({ trxID, amount, customer, invoice, time })}
+              className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 text-white shadow-lg shadow-bkash/20"
+            >
               <Download size={18} /> Receipt
             </button>
           </div>
@@ -500,11 +640,11 @@ const FailurePage = () => {
           <p className="text-zinc-300">{error || "Unknown error occurred"}</p>
         </div>
       </div>
-      <div className="flex gap-4">
-        <Link to="/checkout" className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-xl font-bold transition-colors">
+      <div className="flex flex-col sm:flex-row gap-4">
+        <Link to="/checkout" className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-xl font-bold transition-colors text-center">
           Try Again
         </Link>
-        <Link to="/" className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-xl font-bold transition-colors">
+        <Link to="/" className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-xl font-bold transition-colors text-center">
           Cancel
         </Link>
       </div>
@@ -662,12 +802,12 @@ const Transactions = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       {/* Filters */}
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-5 md:p-6 backdrop-blur-sm">
         <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
           <Search size={20} className="text-bkash" />
           Filter Payments
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
           <div className="space-y-2">
             <label className="text-xs text-zinc-500 uppercase font-bold">Start Date</label>
             <input 
@@ -699,23 +839,22 @@ const Transactions = () => {
           <div className="flex gap-2">
             <button 
               onClick={fetchTransactions}
-              className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-bold py-2 rounded-xl transition-all"
+              className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-bold py-2 rounded-xl transition-all text-sm"
             >
               Filter
             </button>
             <button 
               onClick={() => {
                 setFilters({ start_date: "", end_date: "", search: "" });
-                // Need to fetch again after reset
                 setTimeout(fetchTransactions, 0);
               }}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded-xl transition-all"
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded-xl transition-all text-sm"
             >
               Reset
             </button>
             <button 
               onClick={handleExport}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-bkash rounded-xl transition-all"
+              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-bkash rounded-xl transition-all shrink-0"
               title="Export CSV"
             >
               <Download size={20} />
@@ -725,31 +864,31 @@ const Transactions = () => {
       </div>
 
       {/* List */}
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="p-5 md:p-6 border-b border-bkash-dark flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h3 className="font-bold text-lg">Transaction List</h3>
-          <div className="text-right">
-            <p className="text-xs text-zinc-500 uppercase font-bold">Total Volume</p>
+          <div className="text-left sm:text-right">
+            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Total Volume</p>
             <p className="text-xl font-black text-bkash">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-zinc-800/50 text-zinc-500 text-xs uppercase tracking-wider">
+          <table className="w-full text-left min-w-[800px]">
+            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
               <tr>
-                <th className="py-4 px-6 font-semibold">Date / Time</th>
-                <th className="py-4 px-6 font-semibold">Transaction ID</th>
-                <th className="py-4 px-6 font-semibold">Amount</th>
-                <th className="py-4 px-6 font-semibold">Customer</th>
-                <th className="py-4 px-6 font-semibold">Status</th>
-                <th className="py-4 px-6 font-semibold text-right">Actions</th>
+                <th className="py-4 px-6 font-black">Date / Time</th>
+                <th className="py-4 px-6 font-black">Transaction ID</th>
+                <th className="py-4 px-6 font-black">Amount</th>
+                <th className="py-4 px-6 font-black">Customer</th>
+                <th className="py-4 px-6 font-black">Status</th>
+                <th className="py-4 px-6 font-black text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="animate-spin inline-block mr-2" /> Loading...</td></tr>
               ) : transactions.map((tx) => (
-                <tr key={tx.id} className="group border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                <tr key={tx.id} className="group border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
                   <td className="py-4 px-6 text-sm text-zinc-400">{new Date(tx.created_at).toLocaleString()}</td>
                   <td className="py-4 px-6 font-bold text-sm">{tx.trx_id || "PENDING"}</td>
                   <td className="py-4 px-6 font-bold text-sm text-bkash">{formatCurrency(tx.amount)}</td>
@@ -950,7 +1089,10 @@ const SettingsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const isOnline = useOnlineStatus();
+  const { theme, setTheme } = useTheme();
 
   const testConnection = async () => {
     setIsTesting(true);
@@ -966,6 +1108,33 @@ const SettingsPage = () => {
       toast.error("Failed to reach server");
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("logo", file);
+
+    setIsUploadingLogo(true);
+    try {
+      const res = await fetch("/api/admin/settings/upload-logo", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSettings({ ...settings, SITE_LOGO: data.url });
+        toast.success("Logo uploaded successfully");
+      } else {
+        toast.error(data.error || "Upload failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -1005,7 +1174,7 @@ const SettingsPage = () => {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-bkash" size={40} /></div>;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
         <div className="bg-zinc-800/50 p-8 border-b border-zinc-800">
           <h3 className="text-2xl font-bold flex items-center gap-3">
@@ -1111,6 +1280,74 @@ const SettingsPage = () => {
           </div>
         </form>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-2xl">
+          <h4 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Palette className="text-bkash" size={20} />
+            Theme Preferences
+          </h4>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { id: 'light', label: 'Light', icon: Sun },
+              { id: 'dark', label: 'Dark', icon: Moon },
+              { id: 'system', label: 'System', icon: Monitor },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id as any)}
+                className={cn(
+                  "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
+                  theme === t.id 
+                    ? "bg-bkash/10 border-bkash text-bkash" 
+                    : "bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                )}
+              >
+                <t.icon size={24} />
+                <span className="text-xs font-bold">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-2xl">
+          <h4 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Image className="text-bkash" size={20} />
+            Branding
+          </h4>
+          <div className="space-y-4">
+            <label className="text-sm font-medium text-zinc-400">Site Logo</label>
+            <div className="flex items-center gap-6">
+              <div className="w-20 h-20 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
+                {settings.SITE_LOGO ? (
+                  <img src={settings.SITE_LOGO} alt="Logo" className="w-full h-full object-contain p-2" />
+                ) : (
+                  <Image size={32} className="text-zinc-600" />
+                )}
+              </div>
+              <div className="flex-1 space-y-3">
+                <input 
+                  type="file" 
+                  ref={logoInputRef}
+                  onChange={handleLogoUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <button 
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={isUploadingLogo}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                >
+                  {isUploadingLogo ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                  Upload Logo
+                </button>
+                <p className="text-[10px] text-zinc-500 text-center">Recommended: PNG or SVG, max 2MB</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 };
@@ -1145,11 +1382,15 @@ const Refunds = () => {
   const fetchRefunds = async () => {
     try {
       const res = await fetch("/api/admin/refunds");
-      if (!res.ok) throw new Error("Failed to fetch refunds");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch refunds: ${res.status}`);
+      }
       const data = await res.json();
       setRefunds(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Fetch Refunds Error:", err);
+      toast.error(`Refunds Error: ${err.message}`);
     }
   };
 
@@ -1234,25 +1475,26 @@ const Refunds = () => {
         {/* Left Column: Process Refund & Search */}
         <div className="space-y-6">
           {/* Search Transaction Card */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 md:p-6 backdrop-blur-sm">
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
               <Search size={20} className="text-bkash" />
               Search Transaction
             </h3>
-            <form onSubmit={handleSearch} className="flex gap-2">
+            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="text" 
                 placeholder="Enter Transaction ID (e.g. TST...)" 
                 value={searchTrxId}
                 onChange={(e) => setSearchTrxId(e.target.value)}
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-bkash/50"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50"
               />
               <button 
                 type="submit" 
                 disabled={isSearching}
-                className="bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-bold px-6 rounded-xl transition-all"
+                className="bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
               >
-                {isSearching ? <Loader2 className="animate-spin" size={20} /> : "Search"}
+                {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
+                Search
               </button>
             </form>
 
@@ -1283,7 +1525,7 @@ const Refunds = () => {
 
           {/* Process Refund Form Card */}
           <div className={cn(
-            "bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm transition-opacity duration-300",
+            "bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 md:p-6 backdrop-blur-sm transition-opacity duration-300",
             !foundTx && "opacity-50 pointer-events-none"
           )}>
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -1291,7 +1533,7 @@ const Refunds = () => {
               Process Refund
             </h3>
             <form onSubmit={handleRefund} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs text-zinc-500 uppercase font-bold">Refund Amount <span className="text-rose-500">*</span></label>
                   <input 
@@ -1300,7 +1542,7 @@ const Refunds = () => {
                     required
                     value={refundForm.amount}
                     onChange={(e) => setRefundForm(prev => ({ ...prev, amount: e.target.value }))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1309,7 +1551,7 @@ const Refunds = () => {
                     type="text" 
                     value={refundForm.sku}
                     onChange={(e) => setRefundForm(prev => ({ ...prev, sku: e.target.value }))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
                   />
                 </div>
               </div>
@@ -1319,7 +1561,7 @@ const Refunds = () => {
                   rows={3}
                   value={refundForm.reason}
                   onChange={(e) => setRefundForm(prev => ({ ...prev, reason: e.target.value }))}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-rose-500/50 resize-none"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50 resize-none"
                   placeholder="e.g. Customer requested refund"
                 />
               </div>
@@ -1343,7 +1585,7 @@ const Refunds = () => {
             </h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left min-w-[600px]">
               <thead className="bg-zinc-800/50 text-zinc-500 text-[10px] uppercase tracking-widest">
                 <tr>
                   <th className="py-4 px-4 font-black">Refund ID</th>
@@ -1591,10 +1833,15 @@ const AdminLogin = () => {
   const [username, setUsername] = useState(localStorage.getItem("rememberedUsername") || "");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedUsername"));
+  const [isLoading, setIsLoading] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       const res = await fetch("/api/admin/login", {
         method: "POST",
@@ -1605,6 +1852,13 @@ const AdminLogin = () => {
       
       if (res.ok && data.success) {
         localStorage.setItem("isAdmin", "true");
+        localStorage.setItem("userId", data.user.id);
+        localStorage.setItem("userName", data.user.username);
+        localStorage.setItem("userEmail", data.user.email);
+        localStorage.setItem("userRole", data.user.role);
+        localStorage.setItem("userAvatar", data.user.avatar || "");
+        localStorage.setItem("userPermissions", data.user.permissions.join(","));
+        
         if (rememberMe) {
           localStorage.setItem("rememberedUsername", username);
         } else {
@@ -1617,70 +1871,173 @@ const AdminLogin = () => {
         toast.error(data.error || "Invalid credentials");
       }
     } catch (err) {
-      toast.error("Login failed. Please try again.");
+      toast.error("Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsForgotLoading(true);
+    try {
+      const res = await fetch("/api/admin/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        setShowForgotModal(false);
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsForgotLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-black">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4 transition-colors duration-300">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl"
+        className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden"
       >
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-4 shadow-lg shadow-bkash/20 p-4">
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-full h-full object-contain" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-bkash/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-bkash/5 rounded-full -ml-16 -mb-16 blur-3xl" />
+
+        <div className="text-center mb-10 relative">
+          <div className="w-20 h-20 bg-bkash rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-bkash/20 rotate-3">
+            <CreditCard className="text-white" size={40} />
           </div>
-          <h2 className="text-2xl font-bold text-white">Admin Login</h2>
-          <p className="text-zinc-500 text-sm mt-1">Access secure dashboard</p>
+          <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Admin Portal</h2>
+          <p className="text-zinc-500 mt-2 font-medium">Secure access to bKash Enterprise Gateway</p>
         </div>
-        <form onSubmit={handleLogin} className="space-y-6">
+
+        <form onSubmit={handleLogin} className="space-y-6 relative">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400">Username</label>
-            <input 
-              type="text" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-              placeholder="admin"
-              required
-            />
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Username or Email</label>
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+              <input 
+                type="text" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                placeholder="admin@example.com"
+                required
+              />
+            </div>
           </div>
+
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400">Password</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-              placeholder="••••••••"
-              required
-            />
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Password</label>
+              <button 
+                type="button" 
+                onClick={() => setShowForgotModal(true)}
+                className="text-[10px] font-bold text-bkash hover:underline"
+              >
+                Forgot Password?
+              </button>
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                placeholder="••••••••"
+                required
+              />
+            </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-1">
             <input 
               type="checkbox" 
-              id="remember"
+              id="remember" 
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-bkash focus:ring-bkash"
+              className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-bkash focus:ring-bkash/50"
             />
-            <label htmlFor="remember" className="text-sm text-zinc-400 cursor-pointer">Remember me</label>
+            <label htmlFor="remember" className="text-xs text-zinc-500 cursor-pointer">Remember me</label>
           </div>
 
           <button 
-            type="submit"
-            className="w-full bg-bkash hover:bg-bkash/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-bkash/20 transition-all"
+            type="submit" 
+            disabled={isLoading}
+            className="w-full bg-bkash hover:bg-bkash/90 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
           >
-            Sign In
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Sign In to Dashboard"}
           </button>
-          <Link to="/" className="block text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
-            Back to Checkout
-          </Link>
         </form>
+
+        <AnimatePresence>
+          {showForgotModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl"
+              >
+                <h3 className="text-xl font-black text-zinc-900 dark:text-white mb-2">Reset Password</h3>
+                <p className="text-zinc-500 text-sm mb-6">Enter your email address and we'll send you a link to reset your password.</p>
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 px-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                      placeholder="admin@example.com"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="flex-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold py-3 rounded-xl transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isForgotLoading}
+                      className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      {isForgotLoading ? <Loader2 className="animate-spin" size={18} /> : "Send Link"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <div className="mt-8 pt-8 border-t border-zinc-200 dark:border-zinc-800 text-center">
+          <Link to="/" className="text-zinc-500 hover:text-bkash text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <ArrowLeft size={16} /> Back to Checkout
+          </Link>
+        </div>
       </motion.div>
+      <p className="text-center text-zinc-600 text-[10px] mt-8 uppercase tracking-widest absolute bottom-8 w-full">
+        &copy; {new Date().getFullYear()} bKash Enterprise Gateway • Secure Environment
+      </p>
+    </div>
+  );
+};
+      <p className="text-center text-zinc-600 text-[10px] mt-8 uppercase tracking-widest absolute bottom-8 w-full">
+        &copy; {new Date().getFullYear()} bKash Enterprise Gateway • Secure Environment
+      </p>
     </div>
   );
 };
@@ -1698,6 +2055,38 @@ const UserProfile = () => {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingCreds, setIsUpdatingCreds] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const userId = localStorage.getItem("userId");
+    if (userId) formData.append("userId", userId);
+
+    setIsUploadingAvatar(true);
+    try {
+      const res = await fetch("/api/admin/profile/upload-avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUser({ ...user, avatar: data.url });
+        localStorage.setItem("userAvatar", data.url);
+        toast.success("Avatar updated successfully");
+      } else {
+        toast.error(data.error || "Upload failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1747,11 +2136,20 @@ const UserProfile = () => {
               <div className="h-32 w-32 rounded-3xl bg-zinc-800 border-4 border-zinc-900 overflow-hidden shadow-xl">
                 <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
-              {isEditing && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl p-4">
-                  <p className="text-[10px] font-bold text-center">Use URL below to change</p>
-                </div>
-              )}
+              <button 
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="absolute -bottom-2 -right-2 p-2.5 bg-bkash text-white rounded-xl shadow-lg hover:scale-110 transition-transform active:scale-95 z-10"
+              >
+                {isUploadingAvatar ? <Loader2 className="animate-spin" size={18} /> : <Camera size={18} />}
+              </button>
+              <input 
+                type="file" 
+                ref={avatarInputRef}
+                onChange={handleAvatarUpload}
+                accept="image/*"
+                className="hidden"
+              />
             </div>
             {!isEditing && (
               <button 
@@ -1873,6 +2271,834 @@ const UserProfile = () => {
   );
 };
 
+const Analytics = () => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/analytics")
+      .then(res => res.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-bkash" size={48} /></div>;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard title="Total Volume" value={formatCurrency(data?.last7Days?.reduce((acc: any, curr: any) => acc + curr.total, 0) || 0)} icon={TrendingUp} trend={5.2} color="bg-bkash" />
+        <StatCard title="Success Rate" value="98.5%" icon={CheckCircle2} trend={0.5} color="bg-emerald-600" />
+        <StatCard title="Total Customers" value="1,284" icon={Users} trend={12.4} color="bg-blue-600" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
+          <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+            <TrendingUp className="text-bkash" size={20} />
+            Revenue Trends (Last 7 Days)
+          </h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data?.last7Days}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#E2136E" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#E2136E" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                <XAxis dataKey="date" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                <Area type="monotone" dataKey="total" stroke="#E2136E" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
+          <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+            <Activity className="text-blue-500" size={20} />
+            Transaction Status Distribution
+          </h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data?.statusDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="count"
+                  nameKey="status"
+                >
+                  {data?.statusDistribution?.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={['#E2136E', '#10b981', '#f59e0b', '#3b82f6'][index % 4]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
+        <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+          <Zap className="text-amber-500" size={20} />
+          Hourly Transaction Volume
+        </h3>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data?.hourlyVolume}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <XAxis dataKey="hour" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+              <Bar dataKey="total" fill="#E2136E" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const Customers = () => {
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/customers")
+      .then(res => res.json())
+      .then(setCustomers)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-bkash" size={48} /></div>;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-bkash-dark flex justify-between items-center bg-zinc-950/50">
+          <h3 className="font-bold text-lg">Customer Directory</h3>
+          <div className="flex gap-2">
+            <button className="bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-zinc-700 transition-colors">Export CSV</button>
+            <button className="bg-bkash text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-bkash/90 transition-colors shadow-lg shadow-bkash/20">Add Customer</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+              <tr>
+                <th className="py-4 px-6 font-bold">Customer MSISDN</th>
+                <th className="py-4 px-6 font-bold">Total Transactions</th>
+                <th className="py-4 px-6 font-bold">Total Spent</th>
+                <th className="py-4 px-6 font-bold">Last Activity</th>
+                <th className="py-4 px-6 font-bold text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.map((c, i) => (
+                <tr key={i} className="border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors group">
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-bkash/10 flex items-center justify-center text-bkash font-bold text-xs">
+                        {c.msisdn.slice(-2)}
+                      </div>
+                      <span className="font-bold text-sm text-zinc-200">{c.msisdn}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6 text-zinc-400 text-sm">{c.total_transactions} orders</td>
+                  <td className="py-4 px-6 font-black text-white">{formatCurrency(c.total_spent)}</td>
+                  <td className="py-4 px-6 text-zinc-500 text-xs">{new Date(c.last_transaction).toLocaleString()}</td>
+                  <td className="py-4 px-6 text-right">
+                    <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase">Active</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const Statements = () => {
+  const [from, setFrom] = useState(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [to, setTo] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+
+  const fetchStatement = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/statement?from=${from}&to=${to}`);
+      const data = await res.json();
+      setTransactions(data);
+    } catch (err) {
+      toast.error("Failed to fetch statement data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (transactions.length === 0) {
+      toast.error("No transactions found for the selected period");
+      return;
+    }
+    generateStatementPDF(transactions, from, to);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
+        <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
+          <Download className="text-bkash" />
+          Generate Account Statement
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">From Date</label>
+            <input 
+              type="date" 
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-bkash focus:outline-none transition-all" 
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">To Date</label>
+            <input 
+              type="date" 
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-bkash focus:outline-none transition-all" 
+            />
+          </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={fetchStatement}
+              disabled={loading}
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : "Fetch Data"}
+            </button>
+            <button 
+              onClick={handleDownload}
+              disabled={transactions.length === 0}
+              className="flex-1 bg-bkash hover:bg-bkash/90 disabled:bg-zinc-800 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-bkash/20"
+            >
+              <Download size={18} /> Download PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {transactions.length > 0 && (
+        <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+          <div className="p-6 border-b border-bkash-dark bg-zinc-950/50">
+            <h4 className="font-bold">Preview ({transactions.length} Transactions)</h4>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+                <tr>
+                  <th className="py-4 px-6">Date</th>
+                  <th className="py-4 px-6">Trx ID</th>
+                  <th className="py-4 px-6">Customer</th>
+                  <th className="py-4 px-6 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((t, i) => (
+                  <tr key={i} className="border-b border-bkash-dark/50">
+                    <td className="py-4 px-6 text-sm text-zinc-400">{new Date(t.created_at).toLocaleDateString()}</td>
+                    <td className="py-4 px-6 font-mono text-sm">{t.trx_id}</td>
+                    <td className="py-4 px-6 text-sm">{t.customer_msisdn}</td>
+                    <td className="py-4 px-6 text-right font-bold text-bkash">{formatCurrency(t.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+const Security = () => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+          <ShieldCheck className="text-bkash" />
+          Security Overview
+        </h3>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center p-4 bg-bkash-dark/50 rounded-xl">
+            <div>
+              <p className="font-bold">Two-Factor Authentication</p>
+              <p className="text-xs text-zinc-500">Add an extra layer of security</p>
+            </div>
+            <div className="w-12 h-6 bg-bkash rounded-full relative">
+              <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
+            </div>
+          </div>
+          <div className="flex justify-between items-center p-4 bg-bkash-dark/50 rounded-xl">
+            <div>
+              <p className="font-bold">IP Whitelisting</p>
+              <p className="text-xs text-zinc-500">Restrict access to specific IPs</p>
+            </div>
+            <div className="w-12 h-6 bg-zinc-700 rounded-full relative">
+              <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+          <Activity className="text-bkash" />
+          Recent Logins
+        </h3>
+        <div className="space-y-4">
+          {[
+            { device: "Chrome / Windows", ip: "103.120.2.45", time: "Just now" },
+            { device: "Safari / iPhone", ip: "192.168.1.1", time: "2 hours ago" },
+          ].map((l, i) => (
+            <div key={i} className="flex justify-between items-center p-3 border-b border-zinc-800 last:border-0">
+              <div>
+                <p className="text-sm font-bold">{l.device}</p>
+                <p className="text-[10px] text-zinc-500">{l.ip}</p>
+              </div>
+              <p className="text-[10px] text-zinc-500">{l.time}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </motion.div>
+);
+
+const NotificationBar = () => {
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: "New Payment Received", message: "Invoice #INV-1234 has been paid.", time: "2m ago", type: "success" },
+    { id: 2, title: "Refund Requested", message: "Customer Sumi Akter requested a refund.", time: "15m ago", type: "warning" },
+    { id: 3, title: "System Update", message: "Security patches applied successfully.", time: "1h ago", type: "info" },
+  ]);
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors relative"
+      >
+        <Bell size={20} />
+        {notifications.length > 0 && (
+          <span className="absolute top-2 right-2 w-2 h-2 bg-bkash rounded-full border-2 border-zinc-900" />
+        )}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 z-[70]"
+            />
+            <motion.div 
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute right-0 mt-2 w-80 bg-bkash-dark border border-bkash-dark rounded-2xl shadow-2xl z-[80] overflow-hidden"
+            >
+              <div className="p-4 border-b border-bkash-dark flex justify-between items-center bg-zinc-950/50">
+                <h4 className="font-bold text-sm">Notifications</h4>
+                <button onClick={() => setNotifications([])} className="text-[10px] text-zinc-500 hover:text-bkash">Clear all</button>
+              </div>
+              <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-600">
+                    <Bell size={32} className="mx-auto mb-2 opacity-20" />
+                    <p className="text-xs">No new notifications</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div key={n.id} className="p-4 border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
+                      <div className="flex justify-between items-start mb-1">
+                        <h5 className="font-bold text-xs text-white">{n.title}</h5>
+                        <span className="text-[9px] text-zinc-500">{n.time}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">{n.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="p-3 bg-zinc-950/50 border-t border-bkash-dark text-center">
+                <button className="text-[10px] font-bold text-bkash hover:underline">View all activity</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const SearchTransaction = () => {
+  const [trxID, setTrxID] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const isOnline = useOnlineStatus();
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trxID) return;
+    if (!isOnline) {
+      toast.error("You are offline. Search requires an active internet connection.");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/bkash/search-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trxID }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult(data);
+        if (data.statusCode === "0000") {
+          toast.success("Transaction found!");
+        } else {
+          toast.error(data.statusMessage || "Search failed");
+        }
+      } else {
+        toast.error(data.error || "Search failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!result) return;
+    generateReceipt({
+      trxID: result.trxID,
+      amount: result.amount,
+      customer: result.customerMsisdn,
+      invoice: result.transactionReference,
+      time: result.completedTime
+    });
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-5 md:p-8 backdrop-blur-sm shadow-2xl">
+        <h3 className="text-xl md:text-2xl font-bold mb-6 flex items-center gap-3">
+          <Search className="text-bkash" />
+          Search Transaction Details
+        </h3>
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
+          <input 
+            type="text" 
+            placeholder="Enter Transaction ID (e.g. TST...)" 
+            value={trxID}
+            onChange={(e) => setTrxID(e.target.value)}
+            className="flex-1 bg-bkash-dark/50 border border-bkash-dark rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+          />
+          <button 
+            type="submit" 
+            disabled={loading || !isOnline}
+            className="bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+            Search
+          </button>
+        </form>
+
+        {result && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-10 space-y-8">
+            <div className="flex justify-between items-center border-b border-bkash-dark pb-4">
+              <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Search Result</h4>
+              {result.statusCode === "0000" && (
+                <button 
+                  onClick={handleDownloadReceipt}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"
+                >
+                  <Download size={14} /> Download Receipt
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest border-b border-bkash-dark pb-2">Transaction Information</h4>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Transaction ID</span>
+                    <span className="font-bold text-bkash">{result.trxID || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Amount</span>
+                    <span className="font-black text-xl">{result.amount} {result.currency}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Status</span>
+                    <span className={cn(
+                      "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight",
+                      result.transactionStatus === 'Completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                    )}>
+                      {result.transactionStatus || "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Transaction Type</span>
+                    <span className="text-sm font-medium">{result.transactionType || "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest border-b border-bkash-dark pb-2">Customer & Time</h4>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Customer MSISDN</span>
+                    <span className="text-sm font-bold">{result.customerMsisdn || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Initiation Time</span>
+                    <span className="text-sm text-zinc-300">{result.initiationTime || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Completed Time</span>
+                    <span className="text-sm text-zinc-300">{result.completedTime || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-500">Organization Code</span>
+                    <span className="text-sm text-zinc-400">{result.organizationShortCode || "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-zinc-950/50 rounded-2xl border border-bkash-dark space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500 uppercase font-black tracking-widest">Transaction Reference</span>
+                <span className="text-sm font-medium italic">"{result.transactionReference || 'No reference'}"</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-bkash-dark">
+                <div className="space-y-1">
+                  <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Status Code</p>
+                  <p className="text-xs font-mono text-white">{result.statusCode}</p>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Status Message</p>
+                  <p className="text-xs text-zinc-400">{result.statusMessage}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+const UserManagement = () => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    role: "user",
+    permissions: [] as string[]
+  });
+
+  const allPermissions = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "transactions", label: "Payments" },
+    { id: "search", label: "Search Details" },
+    { id: "refunds", label: "Refunds" },
+    { id: "logs", label: "System Logs" },
+    { id: "audit-logs", label: "Audit Trail" },
+    { id: "settings", label: "Settings" },
+    { id: "profile", label: "Profile" },
+    { id: "analytics", label: "Analytics" },
+    { id: "customers", label: "Customers" },
+    { id: "statements", label: "Statements" },
+    { id: "security", label: "Security" },
+    { id: "user-management", label: "User Management" }
+  ];
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/users");
+      const data = await res.json();
+      setUsers(data);
+    } catch (err) {
+      toast.error("Failed to fetch users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = editingUser ? `/api/admin/users/${editingUser.id}` : "/api/admin/users";
+    const method = editingUser ? "PUT" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        toast.success(editingUser ? "User updated" : "User created");
+        setIsModalOpen(false);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Operation failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("User deleted");
+        fetchUsers();
+      }
+    } catch (err) {
+      toast.error("Failed to delete user");
+    }
+  };
+
+  const togglePermission = (permId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(permId)
+        ? prev.permissions.filter(p => p !== permId)
+        : [...prev.permissions, permId]
+    }));
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="text-xl md:text-2xl font-bold">User Management</h3>
+        <button 
+          onClick={() => {
+            setEditingUser(null);
+            setFormData({ username: "", password: "", role: "user", permissions: [] });
+            setIsModalOpen(true);
+          }}
+          className="w-full sm:w-auto bg-bkash text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2"
+        >
+          <UserPlus size={20} /> Add User
+        </button>
+      </div>
+
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[600px]">
+            <thead className="bg-bkash-dark/50 text-zinc-500 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="py-4 px-6">User</th>
+                <th className="py-4 px-6">Role</th>
+                <th className="py-4 px-6">Permissions</th>
+                <th className="py-4 px-6 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></td></tr>
+              ) : users.map(user => (
+                <tr key={user.id} className="border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-bkash/10 flex items-center justify-center text-bkash font-bold text-sm overflow-hidden">
+                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-white">{user.username}</p>
+                        <p className="text-[10px] text-zinc-500">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={cn(
+                      "px-2 py-1 rounded-full text-[10px] font-bold uppercase",
+                      user.role === 'admin' ? "bg-bkash/10 text-bkash" : "bg-blue-500/10 text-blue-500"
+                    )}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex flex-wrap gap-1">
+                      {user.permissions.split(",").map((p: string) => (
+                        <span key={p} className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{p}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6 text-right space-x-2">
+                    <button 
+                      onClick={() => {
+                        setEditingUser(user);
+                        setFormData({
+                          username: user.username,
+                          email: user.email || "",
+                          password: "",
+                          role: user.role,
+                          permissions: user.permissions.split(",")
+                        });
+                        setIsModalOpen(true);
+                      }}
+                      className="p-2 text-zinc-400 hover:text-white transition-colors"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(user.id)}
+                      className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-5 md:p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
+            >
+              <h4 className="text-xl font-bold mb-6">{editingUser ? "Edit User" : "Add New User"}</h4>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Username</label>
+                    <input 
+                      type="text" required
+                      value={formData.username}
+                      onChange={e => setFormData({...formData, username: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Email Address</label>
+                    <input 
+                      type="email" required
+                      value={formData.email}
+                      onChange={e => setFormData({...formData, email: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Password {editingUser && "(Leave blank to keep current)"}</label>
+                    <input 
+                      type="password" required={!editingUser}
+                      value={formData.password}
+                      onChange={e => setFormData({...formData, password: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Role</label>
+                    <select 
+                      value={formData.role}
+                      onChange={e => setFormData({...formData, role: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-zinc-400">Permissions</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3">
+                    {allPermissions.map(perm => (
+                      <button
+                        key={perm.id}
+                        type="button"
+                        onClick={() => togglePermission(perm.id)}
+                        className={cn(
+                          "px-3 py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all border",
+                          formData.permissions.includes(perm.id)
+                            ? "bg-bkash/10 border-bkash text-bkash"
+                            : "bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500"
+                        )}
+                      >
+                        {perm.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <button 
+                    type="button" onClick={() => setIsModalOpen(false)}
+                    className="order-2 sm:order-1 flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl font-bold transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="order-1 sm:order-2 flex-1 bg-bkash hover:bg-bkash/90 py-3 rounded-xl font-bold transition-all text-white"
+                  >
+                    {editingUser ? "Update User" : "Create User"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1881,13 +3107,46 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem("isAdmin") === "true");
   const isOnline = useOnlineStatus();
 
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const permissions = user.permissions || [];
+  const hasPermission = (perm: string) => permissions.includes(perm);
+
   useEffect(() => {
     const checkAuth = () => {
-      setIsAdmin(localStorage.getItem("isAdmin") === "true");
+      const isAdmin = localStorage.getItem("isAdmin") === "true";
+      setIsAdmin(isAdmin);
+      
+      if (isAdmin && pathname.startsWith("/admin")) {
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const permissions = user.permissions || [];
+        const currentRoute = pathname.split("/").pop() || "admin";
+        
+        const routeToPerm: Record<string, string> = {
+          "admin": "dashboard",
+          "transactions": "transactions",
+          "search": "search",
+          "refunds": "refunds",
+          "logs": "logs",
+          "audit-logs": "audit-logs",
+          "analytics": "analytics",
+          "customers": "customers",
+          "security": "security",
+          "users": "user-management",
+          "settings": "settings",
+          "profile": "profile"
+        };
+        
+        const requiredPerm = routeToPerm[currentRoute];
+        if (requiredPerm && !permissions.includes(requiredPerm)) {
+          toast.error("You don't have permission to access this page");
+          navigate("/admin");
+        }
+      }
     };
+    checkAuth();
     window.addEventListener("storage", checkAuth);
     return () => window.removeEventListener("storage", checkAuth);
-  }, []);
+  }, [pathname]);
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -1899,6 +3158,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   const handleLogout = () => {
     localStorage.removeItem("isAdmin");
+    localStorage.removeItem("user");
     setIsAdmin(false);
     toast.info("Logged out successfully");
     navigate("/");
@@ -1916,9 +3176,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-bkash/30">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white font-sans selection:bg-bkash/30">
       <SyncManager />
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-4 z-[60]">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-bkash-dark flex items-center justify-between px-4 z-[60]">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-bkash rounded-lg flex items-center justify-center">
             <CreditCard className="text-white" size={18} />
@@ -1927,14 +3187,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
         <button 
           onClick={toggleMobileMenu}
-          className="p-2 text-zinc-400 hover:text-white transition-colors"
+          className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 
       <aside className={cn(
-        "fixed left-0 top-0 bottom-0 w-64 bg-zinc-950 border-r border-zinc-800 p-6 flex flex-col gap-8 z-50 transition-transform duration-300 lg:translate-x-0",
+        "fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-bkash-dark p-6 flex flex-col gap-8 z-50 transition-transform duration-300 lg:translate-x-0",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="hidden lg:flex items-center gap-3 px-2">
@@ -1955,18 +3215,21 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
         <div className="lg:hidden h-10" />
 
-        <nav className="flex flex-col gap-2 flex-1">
-          <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />
-          <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />
-          <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />
-          <SidebarItem icon={Terminal} label="System Logs" active={pathname === '/admin/logs'} onClick={() => handleNavClick('/admin/logs')} />
-          <SidebarItem icon={Activity} label="Audit Trail" active={pathname === '/admin/audit-logs'} onClick={() => handleNavClick('/admin/audit-logs')} />
-          <SidebarItem icon={User} label="My Profile" active={pathname === '/admin/profile'} onClick={() => handleNavClick('/admin/profile')} />
-          <SidebarItem icon={TrendingUp} label="Analytics" />
-          <SidebarItem icon={Users} label="Customers" />
-          <SidebarItem icon={ShieldCheck} label="Security" />
+        <nav className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar pr-2">
+          {hasPermission('dashboard') && <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />}
+          {hasPermission('transactions') && <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />}
+          {hasPermission('search') && <SidebarItem icon={Search} label="Search Details" active={pathname === '/admin/search'} onClick={() => handleNavClick('/admin/search')} />}
+          {hasPermission('refunds') && <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />}
+          {hasPermission('logs') && <SidebarItem icon={Terminal} label="System Logs" active={pathname === '/admin/logs'} onClick={() => handleNavClick('/admin/logs')} />}
+          {hasPermission('audit-logs') && <SidebarItem icon={Activity} label="Audit Trail" active={pathname === '/admin/audit-logs'} onClick={() => handleNavClick('/admin/audit-logs')} />}
+          {hasPermission('profile') && <SidebarItem icon={User} label="My Profile" active={pathname === '/admin/profile'} onClick={() => handleNavClick('/admin/profile')} />}
+          {hasPermission('analytics') && <SidebarItem icon={TrendingUp} label="Analytics" active={pathname === '/admin/analytics'} onClick={() => handleNavClick('/admin/analytics')} />}
+          {hasPermission('customers') && <SidebarItem icon={Users} label="Customers" active={pathname === '/admin/customers'} onClick={() => handleNavClick('/admin/customers')} />}
+          {hasPermission('statements') && <SidebarItem icon={Download} label="Statements" active={pathname === '/admin/statements'} onClick={() => handleNavClick('/admin/statements')} />}
+          {hasPermission('security') && <SidebarItem icon={ShieldCheck} label="Security" active={pathname === '/admin/security'} onClick={() => handleNavClick('/admin/security')} />}
+          {hasPermission('user-management') && <SidebarItem icon={UserPlus} label="Users" active={pathname === '/admin/users'} onClick={() => handleNavClick('/admin/users')} />}
         </nav>
-        <div className="pt-6 border-t border-zinc-800 flex flex-col gap-2">
+        <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
           <SidebarItem icon={Settings} label="Settings" active={pathname === '/admin/settings'} onClick={() => handleNavClick('/admin/settings')} />
           <SidebarItem icon={LogOut} label="Logout" onClick={handleLogout} />
         </div>
@@ -1979,32 +3242,42 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         />
       )}
 
-      <main className="lg:ml-64 p-4 md:p-8 pt-20 lg:pt-8">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+      <main className="lg:ml-64 p-3 md:p-8 pt-20 lg:pt-8 min-h-screen flex flex-col">
+        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
+          <div className="w-full lg:w-auto">
+            <h2 className="text-xl md:text-3xl font-bold tracking-tight truncate">
               {pathname === '/admin' && "System Overview"}
               {pathname === '/admin/refunds' && "Refund Management"}
+              {pathname === '/admin/search' && "Transaction Search"}
               {pathname === '/admin/transactions' && "Payment History"}
               {pathname === '/admin/settings' && "System Settings"}
               {pathname === '/admin/profile' && "My Profile"}
               {pathname === '/admin/logs' && "System Logs"}
               {pathname === '/admin/audit-logs' && "Audit Trail"}
+              {pathname === '/admin/analytics' && "Analytics Dashboard"}
+              {pathname === '/admin/customers' && "Customer Management"}
+              {pathname === '/admin/statements' && "Account Statements"}
+              {pathname === '/admin/security' && "Security Center"}
+              {pathname === '/admin/users' && "User Management"}
             </h2>
-            <p className="text-zinc-500 mt-1">Welcome back, {localStorage.getItem("userName") || "Administrator"}</p>
+            <p className="text-zinc-500 text-xs md:text-sm mt-1">Welcome back, {localStorage.getItem("userName") || "Administrator"}</p>
           </div>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:flex-none">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-              <input type="text" placeholder="Search..." className="w-full md:w-64 bg-zinc-900 border border-zinc-800 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all" />
+          <div className="flex items-center gap-3 w-full lg:w-auto">
+            <div className="relative flex-1 lg:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+              <input type="text" placeholder="Search..." className="w-full lg:w-64 bg-bkash-dark/50 border border-bkash-dark rounded-xl py-2 pl-9 pr-4 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all" />
             </div>
-            <button className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors"><Bell size={20} /></button>
-            <Link to="/admin/profile" className="h-10 w-10 rounded-xl bg-zinc-800 overflow-hidden border border-zinc-700 shrink-0 hover:border-bkash transition-colors">
-              <img src={localStorage.getItem("userAvatar") || "https://picsum.photos/seed/admin/100/100"} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <NotificationBar />
+              <Link to="/admin/profile" className="h-9 w-9 md:h-10 md:w-10 rounded-xl bg-zinc-800 overflow-hidden border border-zinc-700 shrink-0 hover:border-bkash transition-colors">
+                <img src={localStorage.getItem("userAvatar") || "https://picsum.photos/seed/admin/100/100"} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              </Link>
+            </div>
           </div>
         </header>
-        {children}
+        <div className="flex-1">
+          {children}
+        </div>
       </main>
 
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
@@ -2017,23 +3290,31 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" richColors theme="dark" />
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Checkout />} />
-          <Route path="/admin" element={<Dashboard />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/refunds" element={<Refunds />} />
-          <Route path="/admin/transactions" element={<Transactions />} />
-          <Route path="/admin/settings" element={<SettingsPage />} />
-          <Route path="/admin/profile" element={<UserProfile />} />
-          <Route path="/admin/logs" element={<LogsPage />} />
-          <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
-          <Route path="/payment-success" element={<SuccessPage />} />
-          <Route path="/payment-failed" element={<FailurePage />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Toaster position="top-right" richColors theme="dark" />
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Checkout />} />
+            <Route path="/admin" element={<Dashboard />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/refunds" element={<Refunds />} />
+            <Route path="/admin/search" element={<SearchTransaction />} />
+            <Route path="/admin/transactions" element={<Transactions />} />
+            <Route path="/admin/settings" element={<SettingsPage />} />
+            <Route path="/admin/profile" element={<UserProfile />} />
+            <Route path="/admin/logs" element={<LogsPage />} />
+            <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
+            <Route path="/admin/analytics" element={<Analytics />} />
+            <Route path="/admin/customers" element={<Customers />} />
+            <Route path="/admin/statements" element={<Statements />} />
+            <Route path="/admin/security" element={<Security />} />
+            <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/payment-success" element={<SuccessPage />} />
+            <Route path="/payment-failed" element={<FailurePage />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

@@ -4,8 +4,24 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg: #ffffff;
+    --text: #000000;
+    --card-bg: #f4f4f5;
+    --border: #e4e4e7;
+  }
+
+  .dark {
+    --bg: #000000;
+    --text: #ffffff;
+    --card-bg: #09090b;
+    --border: #27272a;
+  }
+
   body {
-    @apply bg-black text-white antialiased;
+    @apply antialiased transition-colors duration-300;
+    background-color: var(--bg);
+    color: var(--text);
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 }
