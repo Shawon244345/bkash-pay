@@ -10,6 +10,7 @@ import {
   Users, 
   User,
   ShieldCheck, 
+  ShieldAlert,
   ArrowUpRight,
   Search,
   Bell,
@@ -55,7 +56,15 @@ import {
   DollarSign,
   PieChart as PieChartIcon,
   BarChart3,
-  Clock
+  Clock,
+  Building2,
+  Key,
+  Copy,
+  Wallet,
+  BookOpen,
+  Plus,
+  Trash,
+  Check,
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -191,6 +200,7 @@ interface Transaction {
   status: string;
   customer_msisdn: string;
   merchant_invoice: string;
+  payment_mode?: string;
   created_at: string;
 }
 
@@ -311,7 +321,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/stats")
+    const merchantId = localStorage.getItem("merchant_id");
+    const url = merchantId ? `/api/admin/stats?merchantId=${merchantId}` : "/api/admin/stats";
+    fetch(url)
       .then(res => {
         if (!res.ok) throw new Error("Failed to fetch stats");
         return res.json();
@@ -402,7 +414,13 @@ const Dashboard = () => {
 };
 
 const Checkout = () => {
-  const [amount, setAmount] = useState("100");
+  const [searchParams] = useSearchParams();
+  const merchantId = searchParams.get("mid");
+  const paramAmount = searchParams.get("amount");
+  const paramInvoice = searchParams.get("invoice");
+  
+  const [amount, setAmount] = useState(paramAmount || "100");
+  const [invoice, setInvoice] = useState(paramInvoice || "");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showManualRedirect, setShowManualRedirect] = useState(false);
   const [bkashURL, setBkashURL] = useState("");
@@ -419,7 +437,11 @@ const Checkout = () => {
       const res = await fetch("/api/bkash/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, invoice: `INV-${Date.now()}` }),
+        body: JSON.stringify({ 
+          amount, 
+          invoice: invoice || `INV-${Date.now()}`, 
+          merchantId 
+        }),
       });
       const data = await res.json();
       if (data.bkashURL) {
@@ -465,6 +487,12 @@ const Checkout = () => {
                 <p className="opacity-80 text-xs md:text-sm mt-0.5">Enterprise Payment Gateway</p>
               </div>
             </div>
+            <Link 
+              to="/generate" 
+              className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-2"
+            >
+              <Zap size={18} /> Create Link
+            </Link>
             <Link 
               to="/admin/login" 
               className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-2"
@@ -517,6 +545,153 @@ const Checkout = () => {
                 </a>
               </motion.div>
             )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const PaymentLinkGenerator = () => {
+  const [amount, setAmount] = useState("");
+  const [invoice, setInvoice] = useState("");
+  const [merchantId, setMerchantId] = useState("");
+  const [generatedLink, setGeneratedLink] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleGenerate = () => {
+    if (!amount) {
+      toast.error("Please enter an amount");
+      return;
+    }
+    const baseUrl = window.location.origin;
+    const params = new URLSearchParams();
+    params.set("amount", amount);
+    if (invoice) params.set("invoice", invoice);
+    if (merchantId) params.set("mid", merchantId);
+    
+    const link = `${baseUrl}/?${params.toString()}`;
+    setGeneratedLink(link);
+    toast.success("Payment link generated!");
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedLink);
+    setIsCopied(true);
+    toast.success("Link copied to clipboard!");
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'bKash Payment Link',
+          text: `Pay ৳${amount} via bKash`,
+          url: generatedLink,
+        });
+      } catch (err) {
+        console.error("Share failed:", err);
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl">
+        <div className="bg-bkash-dark border border-bkash-dark rounded-[2.5rem] overflow-hidden shadow-2xl">
+          <div className="bg-bkash p-8 text-white">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2">
+                <Zap className="text-bkash" size={28} />
+              </div>
+              <h2 className="text-2xl font-black tracking-tight">Payment Link Generator</h2>
+            </div>
+            <p className="opacity-80 text-sm font-medium">Create a shareable link for your customers.</p>
+          </div>
+
+          <div className="p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Amount (BDT)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-zinc-500">৳</span>
+                  <input 
+                    type="number" 
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-full bg-black border border-zinc-800 rounded-2xl py-4 pl-10 pr-4 text-xl font-bold text-white focus:border-bkash focus:outline-none transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Invoice (Optional)</label>
+                <input 
+                  type="text" 
+                  value={invoice}
+                  onChange={(e) => setInvoice(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
+                  placeholder="Auto-generated if empty"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Merchant ID (Optional)</label>
+              <input 
+                type="text" 
+                value={merchantId}
+                onChange={(e) => setMerchantId(e.target.value)}
+                className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
+                placeholder="Leave empty for Global API"
+              />
+            </div>
+
+            <button 
+              onClick={handleGenerate}
+              className="w-full bg-bkash hover:bg-bkash/90 text-white font-black py-5 rounded-2xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-3 text-lg"
+            >
+              Generate Link <Zap size={20} />
+            </button>
+
+            <AnimatePresence>
+              {generatedLink && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="pt-6 border-t border-zinc-800 space-y-4"
+                >
+                  <div className="bg-black border border-zinc-800 rounded-2xl p-4 break-all font-mono text-xs text-zinc-400">
+                    {generatedLink}
+                  </div>
+                  <div className="flex gap-4">
+                    <button 
+                      onClick={handleCopy}
+                      className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      {isCopied ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Share2 size={18} />}
+                      {isCopied ? "Copied!" : "Copy Link"}
+                    </button>
+                    <button 
+                      onClick={handleShare}
+                      className="flex-1 bg-white text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink size={18} /> Share Link
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div className="pt-4 text-center">
+              <Link to="/" className="text-zinc-500 hover:text-bkash text-sm font-medium transition-colors">
+                &larr; Back to Checkout
+              </Link>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -751,7 +926,11 @@ const Transactions = () => {
     setLoading(true);
     try {
       if (isOnline) {
-        const params = new URLSearchParams(filters);
+        const merchantId = localStorage.getItem("merchant_id");
+        const params = new URLSearchParams({
+          ...filters,
+          ...(merchantId ? { merchantId } : {})
+        });
         const res = await fetch(`/api/admin/transactions?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch transactions");
         const data = await res.json();
@@ -1086,6 +1265,7 @@ const AuditLogsPage = () => {
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>({});
+  const [merchantSettings, setMerchantSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -1093,23 +1273,8 @@ const SettingsPage = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const isOnline = useOnlineStatus();
   const { theme, setTheme } = useTheme();
-
-  const testConnection = async () => {
-    setIsTesting(true);
-    try {
-      const res = await fetch("/api/admin/test-bkash", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(data.message);
-      } else {
-        toast.error(data.error?.statusMessage || "Connection failed");
-      }
-    } catch (err) {
-      toast.error("Failed to reach server");
-    } finally {
-      setIsTesting(false);
-    }
-  };
+  const userRole = localStorage.getItem("userRole");
+  const merchantId = localStorage.getItem("merchant_id");
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1138,31 +1303,62 @@ const SettingsPage = () => {
     }
   };
 
+  const testConnection = async () => {
+    setIsTesting(true);
+    try {
+      const res = await fetch("/api/admin/test-bkash", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.error?.statusMessage || "Connection failed");
+      }
+    } catch (err) {
+      toast.error("Failed to reach server");
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   useEffect(() => {
-    fetch("/api/admin/settings")
-      .then(res => res.json())
-      .then(data => {
-        setSettings(data);
+    const fetchData = async () => {
+      try {
+        if (userRole === 'admin') {
+          const res = await fetch("/api/admin/settings");
+          const data = await res.json();
+          setSettings(data);
+        } else if (merchantId) {
+          const res = await fetch(`/api/merchant/settings?merchantId=${merchantId}`);
+          const data = await res.json();
+          setMerchantSettings(data);
+        }
+      } catch (err) {
+        toast.error("Failed to fetch settings");
+      } finally {
         setLoading(false);
-      });
-  }, []);
+      }
+    };
+    fetchData();
+  }, [userRole, merchantId]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      if (!isOnline) {
-        await queueAction({ type: 'settings', payload: settings });
-        toast.info("You are offline. Settings update queued for sync.");
-        return;
-      }
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings)
-      });
-      if (res.ok) {
-        toast.success("Settings updated successfully");
+      if (userRole === 'admin') {
+        const res = await fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settings)
+        });
+        if (res.ok) toast.success("Settings updated successfully");
+      } else if (merchantId) {
+        const res = await fetch("/api/merchant/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...merchantSettings, merchantId })
+        });
+        if (res.ok) toast.success("Merchant settings updated successfully");
       }
     } catch (err) {
       toast.error("Failed to update settings");
@@ -1185,88 +1381,198 @@ const SettingsPage = () => {
         </div>
         
         <form onSubmit={handleSave} className="p-8 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">API Credentials</h4>
+          {userRole === 'admin' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">App Key</label>
-                  <input 
-                    type="password" 
-                    value={settings.BKASH_APP_KEY}
-                    onChange={(e) => setSettings({...settings, BKASH_APP_KEY: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">App Secret</label>
-                  <input 
-                    type="password" 
-                    value={settings.BKASH_APP_SECRET}
-                    onChange={(e) => setSettings({...settings, BKASH_APP_SECRET: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Username</label>
-                  <input 
-                    type="text" 
-                    value={settings.BKASH_USERNAME}
-                    onChange={(e) => setSettings({...settings, BKASH_USERNAME: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Password</label>
-                  <input 
-                    type="password" 
-                    value={settings.BKASH_PASSWORD}
-                    onChange={(e) => setSettings({...settings, BKASH_PASSWORD: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
+                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">API Credentials</h4>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">App Key</label>
+                    <input 
+                      type="password" 
+                      value={settings.BKASH_APP_KEY}
+                      onChange={(e) => setSettings({...settings, BKASH_APP_KEY: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">App Secret</label>
+                    <input 
+                      type="password" 
+                      value={settings.BKASH_APP_SECRET}
+                      onChange={(e) => setSettings({...settings, BKASH_APP_SECRET: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Username</label>
+                    <input 
+                      type="text" 
+                      value={settings.BKASH_USERNAME}
+                      onChange={(e) => setSettings({...settings, BKASH_USERNAME: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Password</label>
+                    <input 
+                      type="password" 
+                      value={settings.BKASH_PASSWORD}
+                      onChange={(e) => setSettings({...settings, BKASH_PASSWORD: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Environment Settings</h4>
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">bKash Base URL</label>
-                  <input 
-                    type="text" 
-                    value={settings.BKASH_BASE_URL}
-                    onChange={(e) => setSettings({...settings, BKASH_BASE_URL: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
+                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Environment Settings</h4>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">bKash Base URL</label>
+                    <input 
+                      type="text" 
+                      value={settings.BKASH_BASE_URL}
+                      onChange={(e) => setSettings({...settings, BKASH_BASE_URL: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">Application URL</label>
+                    <input 
+                      type="text" 
+                      value={settings.APP_URL}
+                      onChange={(e) => setSettings({...settings, APP_URL: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Application URL</label>
-                  <input 
-                    type="text" 
-                    value={settings.APP_URL}
-                    onChange={(e) => setSettings({...settings, APP_URL: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
-                  />
-                </div>
-                <div className="p-4 bg-bkash/5 border border-bkash/10 rounded-2xl">
-                  <p className="text-xs text-bkash/80 leading-relaxed">
-                    <ShieldCheck className="inline-block mr-1 mb-0.5" size={14} />
-                    <strong>Security Note:</strong> These credentials are encrypted at rest and only used for server-side bKash API calls. Never share your App Secret or Password.
-                  </p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={testConnection}
-                  disabled={isTesting || !isOnline}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
-                >
-                  {isTesting ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} className="text-amber-500" />}
-                  Test bKash Connection
-                </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
+                <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+                  <CreditCard className="text-bkash" size={18} />
+                  Payment Gateway Selection
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button 
+                    type="button"
+                    onClick={() => setMerchantSettings({...merchantSettings, payment_mode: 'GLOBAL'})}
+                    className={cn(
+                      "p-6 rounded-2xl border text-left transition-all",
+                      merchantSettings?.payment_mode === 'GLOBAL' 
+                        ? "bg-bkash/10 border-bkash ring-1 ring-bkash" 
+                        : "bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800"
+                    )}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-bold">Option 1: Global API</span>
+                      {merchantSettings?.payment_mode === 'GLOBAL' && <CheckCircle2 className="text-bkash" size={20} />}
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">Use the platform's shared bKash credentials. Ideal if you don't have your own bKash merchant API access yet.</p>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setMerchantSettings({...merchantSettings, payment_mode: 'OWN'})}
+                    className={cn(
+                      "p-6 rounded-2xl border text-left transition-all",
+                      merchantSettings?.payment_mode === 'OWN' 
+                        ? "bg-bkash/10 border-bkash ring-1 ring-bkash" 
+                        : "bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800"
+                    )}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-bold">Option 2: Own Credentials</span>
+                      {merchantSettings?.payment_mode === 'OWN' && <CheckCircle2 className="text-bkash" size={20} />}
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">Use your own bKash App Key, Secret, and credentials. You keep full control over your bKash account.</p>
+                  </button>
+                </div>
+              </div>
+
+              {merchantSettings?.payment_mode === 'OWN' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4"
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-400">Your App Key</label>
+                      <input 
+                        type="password" 
+                        value={merchantSettings.bkash_app_key || ""}
+                        onChange={(e) => setMerchantSettings({...merchantSettings, bkash_app_key: e.target.value})}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        placeholder="Enter your bKash App Key"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-400">Your App Secret</label>
+                      <input 
+                        type="password" 
+                        value={merchantSettings.bkash_app_secret || ""}
+                        onChange={(e) => setMerchantSettings({...merchantSettings, bkash_app_secret: e.target.value})}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        placeholder="Enter your bKash App Secret"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-400">Your bKash Username</label>
+                      <input 
+                        type="text" 
+                        value={merchantSettings.bkash_username || ""}
+                        onChange={(e) => setMerchantSettings({...merchantSettings, bkash_username: e.target.value})}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        placeholder="01XXXXXXXXX"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-400">Your bKash Password</label>
+                      <input 
+                        type="password" 
+                        value={merchantSettings.bkash_password || ""}
+                        onChange={(e) => setMerchantSettings({...merchantSettings, bkash_password: e.target.value})}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
+                <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+                  <Key className="text-bkash" size={18} />
+                  Your API Key
+                </h4>
+                <div className="flex gap-3">
+                  <input 
+                    type="text" 
+                    readOnly
+                    value={merchantSettings?.api_key || ""}
+                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm font-mono text-zinc-400"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(merchantSettings?.api_key || "");
+                      toast.success("API Key copied to clipboard");
+                    }}
+                    className="px-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                  >
+                    <Copy size={18} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-3">Use this key to integrate bKash payments into your own website or application.</p>
+              </div>
+            </div>
+          )}
 
           <div className="pt-8 border-t border-zinc-800 flex justify-end">
             <button 
@@ -1282,7 +1588,7 @@ const SettingsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-2xl">
+        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-sm dark:shadow-2xl">
           <h4 className="text-lg font-bold mb-6 flex items-center gap-2">
             <Palette className="text-bkash" size={20} />
             Theme Preferences
@@ -1300,7 +1606,7 @@ const SettingsPage = () => {
                   "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
                   theme === t.id 
                     ? "bg-bkash/10 border-bkash text-bkash" 
-                    : "bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                    : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 )}
               >
                 <t.icon size={24} />
@@ -1310,7 +1616,7 @@ const SettingsPage = () => {
           </div>
         </div>
 
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-2xl">
+        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 backdrop-blur-sm shadow-sm dark:shadow-2xl">
           <h4 className="text-lg font-bold mb-6 flex items-center gap-2">
             <Image className="text-bkash" size={20} />
             Branding
@@ -1318,7 +1624,7 @@ const SettingsPage = () => {
           <div className="space-y-4">
             <label className="text-sm font-medium text-zinc-400">Site Logo</label>
             <div className="flex items-center gap-6">
-              <div className="w-20 h-20 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
+              <div className="w-20 h-20 rounded-2xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden">
                 {settings.SITE_LOGO ? (
                   <img src={settings.SITE_LOGO} alt="Logo" className="w-full h-full object-contain p-2" />
                 ) : (
@@ -1337,7 +1643,7 @@ const SettingsPage = () => {
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
                   disabled={isUploadingLogo}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                  className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
                 >
                   {isUploadingLogo ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
                   Upload Logo
@@ -1518,7 +1824,24 @@ const Refunds = () => {
                     <p className="text-[10px] text-zinc-500 uppercase font-bold">Date</p>
                     <p className="text-xs text-zinc-400">{new Date(foundTx.created_at).toLocaleString()}</p>
                   </div>
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Payment Mode</p>
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest",
+                      foundTx.payment_mode === 'OWN' ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"
+                    )}>
+                      {foundTx.payment_mode === 'OWN' ? "Merchant's Own API" : "Global API"}
+                    </span>
+                  </div>
                 </div>
+                {foundTx.payment_mode === 'OWN' && (
+                  <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+                    <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                      <strong>Refund Restricted:</strong> This transaction was processed using the merchant's own bKash credentials. Refunds must be handled directly through the merchant's bKash panel.
+                    </p>
+                  </div>
+                )}
               </motion.div>
             )}
           </div>
@@ -1567,10 +1890,10 @@ const Refunds = () => {
               </div>
               <button 
                 type="submit" 
-                disabled={isProcessing || !foundTx}
+                disabled={isProcessing || !foundTx || foundTx.payment_mode === 'OWN'}
                 className="w-full bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
               >
-                {isProcessing ? <Loader2 className="animate-spin" /> : "Initiate Refund Request"}
+                {isProcessing ? <Loader2 className="animate-spin" /> : (foundTx?.payment_mode === 'OWN' ? "Refund Restricted" : "Initiate Refund Request")}
               </button>
             </form>
           </div>
@@ -1829,6 +2152,900 @@ const Refunds = () => {
 
 // --- Layout ---
 
+const Subscriptions = () => {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [currentSub, setCurrentSub] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const merchantId = localStorage.getItem("merchant_id");
+
+  const fetchData = async () => {
+    try {
+      const [pRes, sRes] = await Promise.all([
+        fetch("/api/subscription-plans"),
+        fetch(`/api/merchant/subscription?merchantId=${merchantId}`)
+      ]);
+      const [pData, sData] = await Promise.all([pRes.json(), sRes.json()]);
+      setPlans(pData);
+      setCurrentSub(sData);
+    } catch (err) {
+      toast.error("Failed to fetch subscription data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSubscribe = async (planId: string) => {
+    try {
+      const res = await fetch("/api/merchant/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantId, planId })
+      });
+      if (res.ok) {
+        toast.success("Subscribed successfully!");
+        fetchData();
+      }
+    } catch (err) {
+      toast.error("Subscription failed");
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      {currentSub && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-8 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Check className="text-white" size={32} />
+            </div>
+            <div>
+              <div className="text-emerald-500 text-xs font-bold uppercase tracking-widest mb-1">Active Subscription</div>
+              <h3 className="text-2xl font-black">{currentSub.plan_name}</h3>
+              <p className="text-zinc-500 text-sm">Valid until {new Date(currentSub.end_date).toLocaleDateString()}</p>
+            </div>
+          </div>
+          <div className="bg-zinc-900/50 px-6 py-4 rounded-2xl border border-zinc-800">
+            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Status</div>
+            <div className="text-emerald-500 font-bold flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              {currentSub.status}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {plans.map(plan => (
+          <div key={plan.id} className={cn(
+            "bg-zinc-900 border rounded-3xl p-8 flex flex-col transition-all",
+            currentSub?.plan_id === plan.id ? "border-bkash ring-4 ring-bkash/10" : "border-zinc-800 hover:border-zinc-700"
+          )}>
+            <div className="mb-8">
+              <h4 className="text-xl font-black mb-2">{plan.name}</h4>
+              <p className="text-zinc-500 text-sm leading-relaxed">{plan.description}</p>
+            </div>
+            <div className="mb-8">
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-black">৳{plan.price}</span>
+                <span className="text-zinc-500 text-sm">/{plan.duration_days} days</span>
+              </div>
+            </div>
+            <div className="space-y-4 mb-8 flex-1">
+              {JSON.parse(plan.features || '[]').map((f: string, i: number) => (
+                <div key={i} className="flex items-center gap-3 text-sm text-zinc-400">
+                  <div className="w-5 h-5 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0">
+                    <Check className="text-emerald-500" size={12} />
+                  </div>
+                  {f}
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={() => handleSubscribe(plan.id)}
+              disabled={currentSub?.plan_id === plan.id}
+              className={cn(
+                "w-full font-black py-4 rounded-2xl transition-all",
+                currentSub?.plan_id === plan.id 
+                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                  : "bg-bkash hover:bg-bkash/90 text-white shadow-xl shadow-bkash/20"
+              )}
+            >
+              {currentSub?.plan_id === plan.id ? "Current Plan" : "Subscribe Now"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+const AdminPlans = () => {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [merchantSubs, setMerchantSubs] = useState<any[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [newPlan, setNewPlan] = useState({
+    name: '',
+    description: '',
+    price: '',
+    duration_days: '30',
+    features: ''
+  });
+
+  const fetchData = async () => {
+    try {
+      const [pRes, sRes] = await Promise.all([
+        fetch("/api/subscription-plans"),
+        fetch("/api/admin/merchant-subscriptions")
+      ]);
+      const [pData, sData] = await Promise.all([pRes.json(), sRes.json()]);
+      setPlans(pData);
+      setMerchantSubs(sData);
+    } catch (err) {
+      toast.error("Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/admin/subscription-plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newPlan,
+          price: parseFloat(newPlan.price),
+          duration_days: parseInt(newPlan.duration_days),
+          features: newPlan.features.split(',').map(f => f.trim())
+        })
+      });
+      if (res.ok) {
+        toast.success("Plan created");
+        setShowAdd(false);
+        setNewPlan({ name: '', description: '', price: '', duration_days: '30', features: '' });
+        fetchData();
+      }
+    } catch (err) {
+      toast.error("Failed to create plan");
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h3 className="text-2xl font-black">Subscription Plans</h3>
+        <button onClick={() => setShowAdd(true)} className="bg-bkash hover:bg-bkash/90 text-white font-bold px-6 py-3 rounded-2xl flex items-center gap-2 transition-all">
+          <Plus size={20} /> Create Plan
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {plans.map(plan => (
+          <div key={plan.id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+            <h4 className="text-xl font-black mb-2">{plan.name}</h4>
+            <div className="text-2xl font-black text-bkash mb-4">৳{plan.price}</div>
+            <p className="text-zinc-500 text-sm mb-6">{plan.description}</p>
+            <div className="space-y-2">
+              {JSON.parse(plan.features || '[]').map((f: string, i: number) => (
+                <div key={i} className="text-xs text-zinc-400 flex items-center gap-2">
+                  <Check size={12} className="text-emerald-500" /> {f}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-bkash-dark">
+          <h3 className="font-bold text-lg">Merchant Subscriptions</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+              <tr>
+                <th className="py-4 px-6 font-semibold">Merchant</th>
+                <th className="py-4 px-6 font-semibold">Plan</th>
+                <th className="py-4 px-6 font-semibold">Status</th>
+                <th className="py-4 px-6 font-semibold">Expiry</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/50">
+              {merchantSubs.map(sub => (
+                <tr key={sub.id} className="hover:bg-white/5 transition-colors">
+                  <td className="py-4 px-6">
+                    <div className="text-sm font-bold">{sub.merchant_name}</div>
+                    <div className="text-[10px] text-zinc-500">{sub.merchant_email}</div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-xs font-bold">{sub.plan_name}</div>
+                    <div className="text-[10px] text-zinc-500">৳{sub.price}</div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest",
+                      sub.status === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-500/10 text-zinc-500"
+                    )}>
+                      {sub.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6 text-xs text-zinc-400">
+                    {new Date(sub.end_date).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+              {merchantSubs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-zinc-500 text-sm">No active merchant subscriptions found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showAdd && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+              <h3 className="text-xl font-black mb-6">Create New Plan</h3>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Plan Name</label>
+                  <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Description</label>
+                  <textarea value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash h-24" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Price (BDT)</label>
+                    <input type="number" value={newPlan.price} onChange={e => setNewPlan({...newPlan, price: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Duration (Days)</label>
+                    <input type="number" value={newPlan.duration_days} onChange={e => setNewPlan({...newPlan, duration_days: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Features (Comma separated)</label>
+                  <input type="text" value={newPlan.features} onChange={e => setNewPlan({...newPlan, features: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" placeholder="Feature 1, Feature 2..." required />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                  <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Create Plan</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const AdminWithdrawals = () => {
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWithdrawals = async () => {
+    try {
+      const res = await fetch("/api/admin/withdrawals");
+      const data = await res.json();
+      setWithdrawals(data);
+    } catch (err) {
+      toast.error("Failed to fetch withdrawals");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWithdrawals();
+  }, []);
+
+  const handleStatus = async (id: string, status: string) => {
+    const note = prompt("Admin Note (Optional):");
+    try {
+      const res = await fetch("/api/admin/withdrawals/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status, admin_note: note })
+      });
+      if (res.ok) {
+        toast.success(`Withdrawal ${status.toLowerCase()}`);
+        fetchWithdrawals();
+      }
+    } catch (err) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  return (
+    <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+      <div className="p-6 border-b border-bkash-dark">
+        <h3 className="font-bold text-lg">Withdrawal Requests</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+            <tr>
+              <th className="py-4 px-6 font-semibold">Merchant</th>
+              <th className="py-4 px-6 font-semibold">Account Info</th>
+              <th className="py-4 px-6 font-semibold">Amount</th>
+              <th className="py-4 px-6 font-semibold">Status</th>
+              <th className="py-4 px-6 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/50">
+            {withdrawals.map(w => (
+              <tr key={w.id} className="hover:bg-white/5 transition-colors">
+                <td className="py-4 px-6">
+                  <div className="text-sm font-bold">{w.merchant_name}</div>
+                  <div className="text-[10px] text-zinc-500">{new Date(w.created_at).toLocaleString()}</div>
+                </td>
+                <td className="py-4 px-6">
+                  <div className="text-xs font-bold">{w.provider} ({w.account_type})</div>
+                  <div className="text-[10px] text-zinc-500 font-mono">{w.account_number}</div>
+                  {w.account_type === 'BANK' && (
+                    <div className="text-[10px] text-zinc-400 mt-1">
+                      <div>Name: {w.account_name}</div>
+                      <div>Branch: {w.bank_branch}</div>
+                      <div>Routing: {w.routing_number}</div>
+                    </div>
+                  )}
+                </td>
+                <td className="py-4 px-6 font-bold text-sm">৳{w.amount}</td>
+                <td className="py-4 px-6">
+                  <span className={cn(
+                    "text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest",
+                    w.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-500" :
+                    w.status === 'PENDING' ? "bg-amber-500/10 text-amber-500" :
+                    w.status === 'REJECTED' ? "bg-rose-500/10 text-rose-500" :
+                    "bg-zinc-500/10 text-zinc-500"
+                  )}>
+                    {w.status}
+                  </span>
+                </td>
+                <td className="py-4 px-6 text-right">
+                  {w.status === 'PENDING' && (
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => handleStatus(w.id, 'COMPLETED')} className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Approve</button>
+                      <button onClick={() => handleStatus(w.id, 'REJECTED')} className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Reject</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const PayoutAccounts = () => {
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newAccount, setNewAccount] = useState({
+    type: 'MFS',
+    provider: 'bKash',
+    account_number: '',
+    account_name: '',
+    bank_branch: '',
+    routing_number: ''
+  });
+  const merchantId = localStorage.getItem("merchant_id");
+
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`);
+      const data = await res.json();
+      setAccounts(data);
+    } catch (err) {
+      toast.error("Failed to fetch payout accounts");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/merchant/payout-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newAccount, merchantId })
+      });
+      if (res.ok) {
+        toast.success("Payout account added");
+        setShowAdd(false);
+        fetchAccounts();
+      }
+    } catch (err) {
+      toast.error("Failed to add account");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure?")) return;
+    try {
+      const res = await fetch(`/api/merchant/payout-accounts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Account deleted");
+        fetchAccounts();
+      }
+    } catch (err) {
+      toast.error("Failed to delete account");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h4 className="font-bold text-lg">Payout Accounts</h4>
+        <button 
+          onClick={() => setShowAdd(true)}
+          className="bg-bkash hover:bg-bkash/90 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all"
+        >
+          <Plus size={16} /> Add Account
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {accounts.map(acc => (
+          <div key={acc.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative group">
+            <button 
+              onClick={() => handleDelete(acc.id)}
+              className="absolute top-4 right-4 text-zinc-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <Trash size={16} />
+            </button>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-bkash/10 rounded-xl flex items-center justify-center">
+                {acc.type === 'MFS' ? <Wallet className="text-bkash" size={24} /> : <Building2 className="text-bkash" size={24} />}
+              </div>
+              <div>
+                <div className="font-bold text-sm">{acc.provider}</div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-widest">{acc.type} Account</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-500">Number:</span>
+                <span className="font-mono">{acc.account_number}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-500">Name:</span>
+                <span>{acc.account_name}</span>
+              </div>
+              {acc.bank_branch && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-zinc-500">Branch:</span>
+                  <span>{acc.bank_branch}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {showAdd && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+              <h3 className="text-xl font-black mb-6">Add Payout Account</h3>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Type</label>
+                    <select 
+                      value={newAccount.type}
+                      onChange={(e) => setNewAccount({...newAccount, type: e.target.value})}
+                      className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                    >
+                      <option value="MFS">MFS (Mobile)</option>
+                      <option value="BANK">Bank Account</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Provider</label>
+                    <input 
+                      type="text" 
+                      value={newAccount.provider}
+                      onChange={(e) => setNewAccount({...newAccount, provider: e.target.value})}
+                      placeholder="e.g. bKash, Dutch Bangla"
+                      className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Number</label>
+                  <input 
+                    type="text" 
+                    value={newAccount.account_number}
+                    onChange={(e) => setNewAccount({...newAccount, account_number: e.target.value})}
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Name</label>
+                  <input 
+                    type="text" 
+                    value={newAccount.account_name}
+                    onChange={(e) => setNewAccount({...newAccount, account_name: e.target.value})}
+                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                    required
+                  />
+                </div>
+                {newAccount.type === 'BANK' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Branch</label>
+                      <input 
+                        type="text" 
+                        value={newAccount.bank_branch}
+                        onChange={(e) => setNewAccount({...newAccount, bank_branch: e.target.value})}
+                        className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Routing No</label>
+                      <input 
+                        type="text" 
+                        value={newAccount.routing_number}
+                        onChange={(e) => setNewAccount({...newAccount, routing_number: e.target.value})}
+                        className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                  <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Add Account</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const Withdrawals = () => {
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [balance, setBalance] = useState(0);
+  const [paymentMode, setPaymentMode] = useState("GLOBAL");
+  const [loading, setLoading] = useState(true);
+  const [showRequest, setShowRequest] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const merchantId = localStorage.getItem("merchant_id");
+
+  const fetchData = async () => {
+    try {
+      const [wRes, aRes, mRes] = await Promise.all([
+        fetch(`/api/merchant/withdrawals?merchantId=${merchantId}`),
+        fetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`),
+        fetch(`/api/merchant/settings?merchantId=${merchantId}`)
+      ]);
+      const [wData, aData, mData] = await Promise.all([wRes.json(), aRes.json(), mRes.json()]);
+      setWithdrawals(wData);
+      setAccounts(aData);
+      setBalance(mData.balance || 0);
+      setPaymentMode(mData.payment_mode || "GLOBAL");
+      if (aData.length > 0) setSelectedAccount(aData[0].id);
+    } catch (err) {
+      toast.error("Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) return <div className="flex items-center justify-center h-64"><RefreshCcw className="animate-spin text-bkash" /></div>;
+
+  if (paymentMode === 'OWN') {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-6 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] p-8">
+        <div className="w-24 h-24 bg-amber-500/10 rounded-full flex items-center justify-center">
+          <ShieldAlert className="text-amber-500" size={48} />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-2xl font-black tracking-tight">Withdrawals Unavailable</h3>
+          <p className="text-zinc-500 max-w-md mx-auto font-medium">
+            You are currently using your own bKash API credentials. Payments are settled directly to your merchant account by bKash. Withdrawals are only required when using our Global API mode.
+          </p>
+        </div>
+        <button 
+          onClick={() => window.location.href = '/admin/settings'}
+          className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-8 py-3 rounded-2xl transition-all"
+        >
+          Check Settings
+        </button>
+      </motion.div>
+    );
+  }
+
+  const handleRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (parseFloat(amount) > balance) return toast.error("Insufficient balance");
+    if (!selectedAccount) return toast.error("Please select a payout account");
+
+    try {
+      const res = await fetch("/api/merchant/withdrawals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantId, payout_account_id: selectedAccount, amount: parseFloat(amount) })
+      });
+      if (res.ok) {
+        toast.success("Withdrawal request submitted");
+        setShowRequest(false);
+        fetchData();
+      }
+    } catch (err) {
+      toast.error("Failed to submit request");
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-bkash p-8 rounded-3xl text-white shadow-2xl shadow-bkash/30 relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="text-xs font-bold uppercase tracking-widest opacity-80 mb-2">Available Balance</div>
+              <div className="text-4xl font-black mb-6">৳{balance.toLocaleString()}</div>
+              <button 
+                onClick={() => setShowRequest(true)}
+                className="w-full bg-white text-bkash font-black py-4 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              >
+                <ArrowUpRight size={20} /> Request Withdrawal
+              </button>
+            </div>
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
+          </div>
+          
+          <PayoutAccounts />
+        </div>
+
+        <div className="lg:col-span-2 bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+          <div className="p-6 border-b border-bkash-dark flex justify-between items-center">
+            <h3 className="font-bold text-lg">Withdrawal History</h3>
+            <RefreshCcw size={18} className="text-zinc-500 cursor-pointer hover:text-bkash transition-colors" onClick={fetchData} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+                <tr>
+                  <th className="py-4 px-6 font-semibold">Date</th>
+                  <th className="py-4 px-6 font-semibold">Account</th>
+                  <th className="py-4 px-6 font-semibold">Amount</th>
+                  <th className="py-4 px-6 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {withdrawals.map(w => (
+                  <tr key={w.id} className="hover:bg-white/5 transition-colors">
+                    <td className="py-4 px-6 text-xs text-zinc-400">{new Date(w.created_at).toLocaleDateString()}</td>
+                    <td className="py-4 px-6">
+                      <div className="text-xs font-bold">{w.provider}</div>
+                      <div className="text-[10px] text-zinc-500 font-mono">{w.account_number}</div>
+                    </td>
+                    <td className="py-4 px-6 font-bold text-sm">৳{w.amount}</td>
+                    <td className="py-4 px-6">
+                      <span className={cn(
+                        "text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest",
+                        w.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-500" :
+                        w.status === 'PENDING' ? "bg-amber-500/10 text-amber-500" :
+                        w.status === 'REJECTED' ? "bg-rose-500/10 text-rose-500" :
+                        "bg-zinc-500/10 text-zinc-500"
+                      )}>
+                        {w.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showRequest && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+              <h3 className="text-xl font-black mb-6">Request Withdrawal</h3>
+              <form onSubmit={handleRequest} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Amount to Withdraw</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-zinc-500">৳</span>
+                    <input 
+                      type="number" 
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full bg-black border border-zinc-800 rounded-2xl py-4 pl-10 pr-4 text-2xl font-bold focus:outline-none focus:border-bkash"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  <div className="text-[10px] text-zinc-500 text-right">Max: ৳{balance.toLocaleString()}</div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Payout Account</label>
+                  <div className="space-y-2">
+                    {accounts.map(acc => (
+                      <label key={acc.id} className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all",
+                        selectedAccount === acc.id ? "bg-bkash/10 border-bkash" : "bg-black border-zinc-800 hover:border-zinc-700"
+                      )}>
+                        <input 
+                          type="radio" 
+                          name="account" 
+                          checked={selectedAccount === acc.id}
+                          onChange={() => setSelectedAccount(acc.id)}
+                          className="hidden"
+                        />
+                        <div className={cn(
+                          "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                          selectedAccount === acc.id ? "border-bkash" : "border-zinc-700"
+                        )}>
+                          {selectedAccount === acc.id && <div className="w-2 h-2 bg-bkash rounded-full" />}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold">{acc.provider} ({acc.account_number})</div>
+                          <div className="text-[10px] text-zinc-500">{acc.account_name}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowRequest(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                  <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Submit Request</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const ApiDocs = () => {
+  const merchantId = localStorage.getItem("merchant_id");
+  const apiKey = "bk_live_xxxxxxxxxxxxxxxxxxxxxxxx"; // Mock for docs
+  const appUrl = window.location.origin;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-8 backdrop-blur-sm">
+        <h3 className="text-2xl font-black mb-4 flex items-center gap-3">
+          <BookOpen className="text-bkash" size={28} />
+          Merchant API Documentation
+        </h3>
+        <p className="text-zinc-400 leading-relaxed max-w-3xl">
+          Integrate bKash payments into your website or application using our simple REST API. 
+          Whether you use our Global API or your own credentials, the integration process remains the same.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h4 className="font-bold text-lg mb-4">1. Authentication</h4>
+            <p className="text-sm text-zinc-500 mb-4">All API requests must include your API Key in the headers.</p>
+            <div className="bg-black rounded-xl p-4 font-mono text-xs text-emerald-500 overflow-x-auto">
+              Authorization: Bearer {apiKey}
+            </div>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h4 className="font-bold text-lg mb-4">2. Create Payment</h4>
+            <p className="text-sm text-zinc-500 mb-4">Endpoint to initiate a bKash payment session.</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="bg-emerald-500/10 text-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Post</span>
+                <span className="text-xs font-mono text-zinc-400">{appUrl}/api/bkash/create-payment</span>
+              </div>
+              <div className="bg-black rounded-xl p-4 font-mono text-xs text-zinc-300 overflow-x-auto">
+                {`{
+  "amount": "100.00",
+  "invoice": "INV-123456",
+  "merchantId": "${merchantId || 'YOUR_MERCHANT_ID'}"
+}`}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+          <h4 className="font-bold text-lg mb-4 flex items-center justify-between">
+            Try It Now
+            <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-1 rounded-full uppercase tracking-widest">Sandbox</span>
+          </h4>
+          <p className="text-sm text-zinc-500 mb-6">Test the payment flow directly from this documentation.</p>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Test Amount</label>
+              <input type="number" defaultValue="10" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash transition-all" />
+            </div>
+            <button 
+              onClick={async () => {
+                const amount = (document.querySelector('input[type="number"]') as HTMLInputElement).value;
+                toast.loading("Initiating test payment...");
+                try {
+                  const res = await fetch("/api/bkash/create-payment", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount, invoice: `TEST-${Date.now()}`, merchantId }),
+                  });
+                  const data = await res.json();
+                  if (data.bkashURL) {
+                    window.open(data.bkashURL, '_blank');
+                    toast.dismiss();
+                    toast.success("Test payment initiated in new tab!");
+                  } else {
+                    toast.error(data.error || "Failed to initiate");
+                  }
+                } catch (err) {
+                  toast.error("Something went wrong");
+                }
+              }}
+              className="w-full bg-bkash hover:bg-bkash/90 text-white font-bold py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
+            >
+              <Zap size={18} /> Initiate Test Payment
+            </button>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-zinc-800">
+            <h5 className="font-bold text-sm mb-4">Integration Modes</h5>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
+                <div className="text-bkash font-bold text-xs mb-1">Global Mode</div>
+                <p className="text-[10px] text-zinc-500">No bKash merchant account needed. Withdraw balance to your MFS/Bank.</p>
+              </div>
+              <div className="p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
+                <div className="text-blue-500 font-bold text-xs mb-1">Own Mode</div>
+                <p className="text-[10px] text-zinc-500">Use your own bKash credentials. Money goes directly to your account.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 const AdminLogin = () => {
   const [username, setUsername] = useState(localStorage.getItem("rememberedUsername") || "");
   const [password, setPassword] = useState("");
@@ -1852,10 +3069,12 @@ const AdminLogin = () => {
       
       if (res.ok && data.success) {
         localStorage.setItem("isAdmin", "true");
+        localStorage.setItem("user", JSON.stringify(data.user));
         localStorage.setItem("userId", data.user.id);
         localStorage.setItem("userName", data.user.username);
         localStorage.setItem("userEmail", data.user.email);
         localStorage.setItem("userRole", data.user.role);
+        localStorage.setItem("merchant_id", data.user.merchant_id || "");
         localStorage.setItem("userAvatar", data.user.avatar || "");
         localStorage.setItem("userPermissions", data.user.permissions.join(","));
         
@@ -1978,6 +3197,15 @@ const AdminLogin = () => {
           </button>
         </form>
 
+        <div className="mt-6 text-center">
+          <p className="text-sm text-zinc-500">
+            Don't have a merchant account?{" "}
+            <Link to="/merchant/register" className="text-bkash font-bold hover:underline">
+              Register Now
+            </Link>
+          </p>
+        </div>
+
         <AnimatePresence>
           {showForgotModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -2035,9 +3263,117 @@ const AdminLogin = () => {
     </div>
   );
 };
-      <p className="text-center text-zinc-600 text-[10px] mt-8 uppercase tracking-widest absolute bottom-8 w-full">
-        &copy; {new Date().getFullYear()} bKash Enterprise Gateway • Secure Environment
-      </p>
+
+const MerchantRegister = () => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/merchant/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Registration successful! Please login.");
+        navigate("/admin/login");
+      } else {
+        toast.error(data.error || "Registration failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-1 bg-bkash" />
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative z-10"
+      >
+        <div className="flex flex-col items-center mb-10">
+          <div className="w-20 h-20 bg-bkash rounded-3xl flex items-center justify-center shadow-2xl shadow-bkash/30 mb-6 rotate-3">
+            <UserPlus className="text-white" size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Merchant Sign Up</h2>
+          <p className="text-zinc-500 font-medium mt-2 text-center">Start accepting bKash payments today.</p>
+        </div>
+
+        <form onSubmit={handleRegister} className="space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Business Name</label>
+              <div className="relative group">
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="text" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  placeholder="Acme Corp"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Email Address</label>
+              <div className="relative group">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  placeholder="merchant@example.com"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="w-full bg-bkash hover:bg-bkash/90 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
+          >
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Create Merchant Account"}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Already have an account?{" "}
+            <Link to="/admin/login" className="text-bkash font-bold hover:underline">
+              Sign In
+            </Link>
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 };
@@ -3108,17 +4444,39 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const isOnline = useOnlineStatus();
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const permissions = user.permissions || [];
-  const hasPermission = (perm: string) => permissions.includes(perm);
+  const [permissions, setPermissions] = useState<string[]>(user.permissions || []);
+  const userRole = localStorage.getItem("userRole");
+  const hasPermission = (perm: string) => userRole === 'admin' || permissions.includes(perm);
+
+  useEffect(() => {
+    const syncProfile = async () => {
+      if (localStorage.getItem("isAdmin") === "true") {
+        try {
+          const res = await fetch("/api/user/profile");
+          const data = await res.json();
+          if (res.ok) {
+            localStorage.setItem("user", JSON.stringify(data));
+            setPermissions(data.permissions || []);
+            window.dispatchEvent(new Event("storage"));
+          }
+        } catch (err) {
+          console.error("Profile sync failed:", err);
+        }
+      }
+    };
+    syncProfile();
+  }, []);
 
   useEffect(() => {
     const checkAuth = () => {
       const isAdmin = localStorage.getItem("isAdmin") === "true";
       setIsAdmin(isAdmin);
       
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      setPermissions(user.permissions || []);
+      const permissions = user.permissions || [];
+      
       if (isAdmin && pathname.startsWith("/admin")) {
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const permissions = user.permissions || [];
         const currentRoute = pathname.split("/").pop() || "admin";
         
         const routeToPerm: Record<string, string> = {
@@ -3133,7 +4491,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           "security": "security",
           "users": "user-management",
           "settings": "settings",
-          "profile": "profile"
+          "profile": "profile",
+          "api-docs": "api-docs",
+          "withdrawals": "withdrawals",
+          "subscriptions": "subscriptions"
         };
         
         const requiredPerm = routeToPerm[currentRoute];
@@ -3228,6 +4589,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           {hasPermission('statements') && <SidebarItem icon={Download} label="Statements" active={pathname === '/admin/statements'} onClick={() => handleNavClick('/admin/statements')} />}
           {hasPermission('security') && <SidebarItem icon={ShieldCheck} label="Security" active={pathname === '/admin/security'} onClick={() => handleNavClick('/admin/security')} />}
           {hasPermission('user-management') && <SidebarItem icon={UserPlus} label="Users" active={pathname === '/admin/users'} onClick={() => handleNavClick('/admin/users')} />}
+          {hasPermission('api-docs') && <SidebarItem icon={BookOpen} label="API Documentation" active={pathname === '/admin/api-docs'} onClick={() => handleNavClick('/admin/api-docs')} />}
+          {hasPermission('withdrawals') && <SidebarItem icon={Wallet} label="Withdrawals" active={pathname === '/admin/withdrawals'} onClick={() => handleNavClick('/admin/withdrawals')} />}
+          {hasPermission('subscriptions') && <SidebarItem icon={Zap} label="Subscriptions" active={pathname === '/admin/subscriptions'} onClick={() => handleNavClick('/admin/subscriptions')} />}
+          <SidebarItem icon={Share2} label="Payment Links" active={pathname === '/generate'} onClick={() => handleNavClick('/generate')} />
         </nav>
         <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
           <SidebarItem icon={Settings} label="Settings" active={pathname === '/admin/settings'} onClick={() => handleNavClick('/admin/settings')} />
@@ -3245,7 +4610,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <main className="lg:ml-64 p-3 md:p-8 pt-20 lg:pt-8 min-h-screen flex flex-col">
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
           <div className="w-full lg:w-auto">
-            <h2 className="text-xl md:text-3xl font-bold tracking-tight truncate">
+            <h2 className="text-xl md:text-3xl font-bold tracking-tight truncate flex items-center gap-2">
               {pathname === '/admin' && "System Overview"}
               {pathname === '/admin/refunds' && "Refund Management"}
               {pathname === '/admin/search' && "Transaction Search"}
@@ -3259,8 +4624,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin/statements' && "Account Statements"}
               {pathname === '/admin/security' && "Security Center"}
               {pathname === '/admin/users' && "User Management"}
+              {pathname === '/admin/api-docs' && "API Documentation"}
+              {pathname === '/admin/withdrawals' && "Withdrawal Management"}
+              {pathname === '/admin/subscriptions' && "Subscription Plans"}
+              {localStorage.getItem("userRole") === 'merchant' && (
+                <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">Merchant</span>
+              )}
             </h2>
-            <p className="text-zinc-500 text-xs md:text-sm mt-1">Welcome back, {localStorage.getItem("userName") || "Administrator"}</p>
+            <p className="text-zinc-500 text-xs md:text-sm mt-1">
+              Welcome back, {localStorage.getItem("userName") || "Administrator"}
+              {localStorage.getItem("userRole") === 'merchant' && localStorage.getItem("user") && (
+                <span className="ml-2 text-zinc-400">({JSON.parse(localStorage.getItem("user") || "{}").merchant?.name})</span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-3 w-full lg:w-auto">
             <div className="relative flex-1 lg:flex-none">
@@ -3296,6 +4672,7 @@ export default function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<Checkout />} />
+            <Route path="/merchant/register" element={<MerchantRegister />} />
             <Route path="/admin" element={<Dashboard />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/refunds" element={<Refunds />} />
@@ -3310,6 +4687,10 @@ export default function App() {
             <Route path="/admin/statements" element={<Statements />} />
             <Route path="/admin/security" element={<Security />} />
             <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/admin/api-docs" element={<ApiDocs />} />
+            <Route path="/admin/withdrawals" element={localStorage.getItem("userRole") === 'admin' ? <AdminWithdrawals /> : <Withdrawals />} />
+            <Route path="/admin/subscriptions" element={localStorage.getItem("userRole") === 'admin' ? <AdminPlans /> : <Subscriptions />} />
+            <Route path="/generate" element={<PaymentLinkGenerator />} />
             <Route path="/payment-success" element={<SuccessPage />} />
             <Route path="/payment-failed" element={<FailurePage />} />
           </Routes>

@@ -63,6 +63,8 @@ const initDb = async () => {
       status TEXT,
       customer_msisdn TEXT,
       merchant_invoice TEXT,
+      merchant_id TEXT,
+      payment_mode TEXT DEFAULT 'GLOBAL',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -105,6 +107,73 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS merchants (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT UNIQUE,
+      payment_mode TEXT DEFAULT 'GLOBAL', -- 'OWN' or 'GLOBAL'
+      bkash_app_key TEXT,
+      bkash_app_secret TEXT,
+      bkash_username TEXT,
+      bkash_password TEXT,
+      api_key TEXT UNIQUE,
+      balance REAL DEFAULT 0,
+      status TEXT DEFAULT 'ACTIVE',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS payout_accounts (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT,
+      type TEXT, -- 'MFS' or 'BANK'
+      provider TEXT, -- 'bKash', 'Nagad', 'Rocket', or Bank Name
+      account_number TEXT,
+      account_name TEXT,
+      bank_branch TEXT,
+      routing_number TEXT,
+      is_default BOOLEAN DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT,
+      payout_account_id TEXT,
+      amount REAL,
+      status TEXT DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'
+      admin_note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY (payout_account_id) REFERENCES payout_accounts(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS subscription_plans (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      description TEXT,
+      price REAL,
+      duration_days INTEGER,
+      features TEXT, -- JSON string
+      is_active BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY,
+      merchant_id TEXT,
+      plan_id TEXT,
+      status TEXT DEFAULT 'PENDING', -- 'PENDING', 'ACTIVE', 'EXPIRED', 'CANCELLED'
+      payment_id TEXT,
+      trx_id TEXT,
+      start_date DATETIME,
+      end_date DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY (plan_id) REFERENCES subscription_plans(id)
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE,
@@ -113,13 +182,22 @@ const initDb = async () => {
       role TEXT,
       permissions TEXT,
       avatar TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      merchant_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id)
     );
   `);
 
   // Migration for users table to ensure all columns exist
   try { await db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (e) {}
   try { await db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE users ADD COLUMN merchant_id TEXT"); } catch (e) {}
+
+  // Migration for transactions and refunds to include merchant_id
+  try { await db.run("ALTER TABLE transactions ADD COLUMN merchant_id TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'GLOBAL'"); } catch (e) {}
+  try { await db.run("ALTER TABLE refunds ADD COLUMN merchant_id TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE merchants ADD COLUMN balance REAL DEFAULT 0"); } catch (e) {}
 
   // Migration for refunds table to ensure all columns exist
   try { await db.run("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME"); } catch (e) {}
@@ -145,17 +223,28 @@ const initDb = async () => {
   // Seed default admin user
   const adminUsername = await getSetting("ADMIN_USERNAME", "admin");
   const adminPassword = await getSetting("ADMIN_PASSWORD", "admin123");
-  const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements";
+  const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements,withdrawals,subscriptions";
   
-  await db.run(
-    "INSERT OR IGNORE INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
-    uuidv4(),
-    adminUsername,
-    "admin@bkash-pay.com",
-    adminPassword,
-    "admin",
-    allPermissions
-  );
+  // Check if admin exists
+  const existingAdmin = await db.get("SELECT * FROM users WHERE username = ?", adminUsername);
+  if (!existingAdmin) {
+    await db.run(
+      "INSERT INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
+      uuidv4(),
+      adminUsername,
+      "admin@bkash-pay.com",
+      adminPassword,
+      "admin",
+      allPermissions
+    );
+  } else {
+    // Ensure admin has all permissions
+    await db.run("UPDATE users SET permissions = ? WHERE username = ?", allPermissions, adminUsername);
+  }
+
+  // Update existing merchants with new permissions
+  const merchantPermissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
+  await db.run("UPDATE users SET permissions = ? WHERE role = 'merchant'", merchantPermissions);
 };
 
 const app = express();
@@ -190,11 +279,25 @@ const getSetting = async (key: string, defaultValue: string = "") => {
   return row ? row.value : (process.env[key] || defaultValue);
 };
 
-const getBkashHeaders = async () => {
-  const appKey = await getSetting("BKASH_APP_KEY");
-  const appSecret = await getSetting("BKASH_APP_SECRET");
-  const username = await getSetting("BKASH_USERNAME");
-  const password = await getSetting("BKASH_PASSWORD");
+const getBkashHeaders = async (merchantId?: string) => {
+  let appKey, appSecret, username, password;
+
+  if (merchantId) {
+    const merchant = await db.get("SELECT * FROM merchants WHERE id = ?", merchantId);
+    if (merchant && merchant.payment_mode === 'OWN') {
+      appKey = merchant.bkash_app_key;
+      appSecret = merchant.bkash_app_secret;
+      username = merchant.bkash_username;
+      password = merchant.bkash_password;
+    }
+  }
+
+  // Fallback to global settings if not merchant-specific or mode is GLOBAL
+  if (!appKey) appKey = await getSetting("BKASH_APP_KEY");
+  if (!appSecret) appSecret = await getSetting("BKASH_APP_SECRET");
+  if (!username) username = await getSetting("BKASH_USERNAME");
+  if (!password) password = await getSetting("BKASH_PASSWORD");
+
   const baseUrl = await getSetting("BKASH_BASE_URL");
 
   const { data } = await axios.post(
@@ -228,8 +331,8 @@ app.use((req, res, next) => {
 
 app.post("/api/bkash/create-payment", async (req, res) => {
   try {
-    const { amount, invoice } = req.body;
-    const headers = await getBkashHeaders();
+    const { amount, invoice, merchantId } = req.body;
+    const headers = await getBkashHeaders(merchantId);
     const baseUrl = await getSetting("BKASH_BASE_URL");
     const appUrl = await getSetting("APP_URL");
     
@@ -238,7 +341,7 @@ app.post("/api/bkash/create-payment", async (req, res) => {
       {
         mode: "0011",
         payerReference: invoice || `INV-${Date.now()}`,
-        callbackURL: `${appUrl}/api/bkash/callback`,
+        callbackURL: `${appUrl}/api/bkash/callback?mid=${merchantId || ''}`,
         amount: amount.toString(),
         currency: "BDT",
         intent: "sale",
@@ -251,7 +354,16 @@ app.post("/api/bkash/create-payment", async (req, res) => {
     await logToFile("bKash Create Response", data);
 
     if (data.paymentID && data.bkashURL) {
-      await db.run("INSERT INTO transactions (id, payment_id, amount, status, merchant_invoice) VALUES (?, ?, ?, ?, ?)", uuidv4(), data.paymentID, amount, "initiated", invoice);
+      let paymentMode = 'GLOBAL';
+      if (merchantId) {
+        const merchant = await db.get("SELECT payment_mode FROM merchants WHERE id = ?", merchantId);
+        if (merchant) paymentMode = merchant.payment_mode;
+      }
+      
+      await db.run(
+        "INSERT INTO transactions (id, payment_id, amount, status, merchant_invoice, merchant_id, payment_mode) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+        uuidv4(), data.paymentID, amount, "initiated", invoice, merchantId, paymentMode
+      );
       
       res.json({ bkashURL: data.bkashURL });
     } else {
@@ -264,8 +376,9 @@ app.post("/api/bkash/create-payment", async (req, res) => {
 });
 
 app.get("/api/bkash/callback", async (req, res) => {
-  const { paymentID, status } = req.query;
-  await logToFile("bKash Callback Received", { paymentID, status });
+  const { paymentID, status, mid } = req.query;
+  const merchantId = mid as string;
+  await logToFile("bKash Callback Received", { paymentID, status, merchantId });
 
   if (!paymentID) {
     return res.redirect("/payment-failed?error=missing_payment_id");
@@ -273,7 +386,7 @@ app.get("/api/bkash/callback", async (req, res) => {
 
   if (status === "success") {
     try {
-      const headers = await getBkashHeaders();
+      const headers = await getBkashHeaders(merchantId);
       const baseUrl = await getSetting("BKASH_BASE_URL");
       
       const { data } = await axios.post(
@@ -287,6 +400,15 @@ app.get("/api/bkash/callback", async (req, res) => {
       if (data.statusCode === "0000") {
         await db.run("UPDATE transactions SET status = ?, trx_id = ?, customer_msisdn = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?", "completed", data.trxID, data.customerMsisdn, paymentID);
         
+        // Update merchant balance if using GLOBAL mode
+        if (merchantId) {
+          const merchant = await db.get("SELECT payment_mode FROM merchants WHERE id = ?", merchantId);
+          if (merchant && merchant.payment_mode === 'GLOBAL') {
+            await db.run("UPDATE merchants SET balance = balance + ? WHERE id = ?", data.amount, merchantId);
+            await auditLog("BALANCE_INCREMENT", "system", `Merchant ${merchantId} balance increased by ${data.amount} for payment ${paymentID}`);
+          }
+        }
+
         const params = new URLSearchParams({
           trxID: data.trxID,
           amount: data.amount,
@@ -318,6 +440,11 @@ app.post("/api/admin/login", async (req, res) => {
     const user = await db.get("SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?", username, username, password);
 
     if (user) {
+      let merchant = null;
+      if (user.merchant_id) {
+        merchant = await db.get("SELECT * FROM merchants WHERE id = ?", user.merchant_id);
+      }
+
       await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
       res.json({ 
         success: true, 
@@ -327,6 +454,8 @@ app.post("/api/admin/login", async (req, res) => {
           email: user.email,
           role: user.role,
           avatar: user.avatar,
+          merchant_id: user.merchant_id,
+          merchant: merchant,
           permissions: user.permissions.split(",")
         }
       });
@@ -337,6 +466,231 @@ app.post("/api/admin/login", async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/merchant/register", async (req, res) => {
+  const { name, email, password } = req.body;
+  
+  try {
+    const existingUser = await db.get("SELECT * FROM users WHERE email = ?", email);
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already registered" });
+    }
+
+    const merchantId = uuidv4();
+    const userId = uuidv4();
+    const apiKey = `bk_${uuidv4().replace(/-/g, '')}`;
+
+    await db.run(
+      "INSERT INTO merchants (id, name, email, api_key) VALUES (?, ?, ?, ?)",
+      merchantId, name, email, apiKey
+    );
+
+    const permissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
+    await db.run(
+      "INSERT INTO users (id, username, email, password, role, permissions, merchant_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      userId, email, email, password, "merchant", permissions, merchantId
+    );
+
+    res.json({ success: true, message: "Merchant registered successfully" });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/merchant/settings", async (req, res) => {
+  const { merchantId } = req.query;
+  try {
+    const merchant = await db.get("SELECT * FROM merchants WHERE id = ?", merchantId);
+    res.json(merchant);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+
+app.post("/api/merchant/settings", async (req, res) => {
+  const { merchantId, payment_mode, bkash_app_key, bkash_app_secret, bkash_username, bkash_password } = req.body;
+  try {
+    await db.run(
+      "UPDATE merchants SET payment_mode = ?, bkash_app_key = ?, bkash_app_secret = ?, bkash_username = ?, bkash_password = ? WHERE id = ?",
+      payment_mode, bkash_app_key, bkash_app_secret, bkash_username, bkash_password, merchantId
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
+// Payout Accounts
+app.get("/api/merchant/payout-accounts", async (req, res) => {
+  const { merchantId } = req.query;
+  try {
+    const accounts = await db.all("SELECT * FROM payout_accounts WHERE merchant_id = ?", merchantId);
+    res.json(accounts);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch payout accounts" });
+  }
+});
+
+app.post("/api/merchant/payout-accounts", async (req, res) => {
+  const { merchantId, type, provider, account_number, account_name, bank_branch, routing_number } = req.body;
+  try {
+    const id = uuidv4();
+    await db.run(
+      "INSERT INTO payout_accounts (id, merchant_id, type, provider, account_number, account_name, bank_branch, routing_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      id, merchantId, type, provider, account_number, account_name, bank_branch, routing_number
+    );
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to add payout account" });
+  }
+});
+
+app.delete("/api/merchant/payout-accounts/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.run("DELETE FROM payout_accounts WHERE id = ?", id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete payout account" });
+  }
+});
+
+// Withdrawals
+app.get("/api/merchant/withdrawals", async (req, res) => {
+  const { merchantId } = req.query;
+  try {
+    const withdrawals = await db.all(
+      "SELECT w.*, p.account_number, p.provider FROM withdrawals w JOIN payout_accounts p ON w.payout_account_id = p.id WHERE w.merchant_id = ? ORDER BY w.created_at DESC",
+      merchantId
+    );
+    res.json(withdrawals);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch withdrawals" });
+  }
+});
+
+app.post("/api/merchant/withdrawals", async (req, res) => {
+  const { merchantId, payout_account_id, amount } = req.body;
+  try {
+    const merchant = await db.get("SELECT balance FROM merchants WHERE id = ?", merchantId);
+    if (!merchant || merchant.balance < amount) {
+      return res.status(400).json({ error: "Insufficient balance" });
+    }
+    
+    const id = uuidv4();
+    await db.exec("BEGIN TRANSACTION");
+    try {
+      await db.run("UPDATE merchants SET balance = balance - ? WHERE id = ?", amount, merchantId);
+      await db.run("INSERT INTO withdrawals (id, merchant_id, payout_account_id, amount) VALUES (?, ?, ?, ?)", id, merchantId, payout_account_id, amount);
+      await db.exec("COMMIT");
+      res.json({ success: true, id });
+    } catch (e) {
+      await db.exec("ROLLBACK");
+      res.status(500).json({ error: "Withdrawal failed" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Admin Withdrawal Management
+app.get("/api/admin/withdrawals", async (req, res) => {
+  try {
+    const withdrawals = await db.all(
+      "SELECT w.*, m.name as merchant_name, p.account_number, p.provider, p.type as account_type, p.account_name, p.bank_branch, p.routing_number FROM withdrawals w JOIN merchants m ON w.merchant_id = m.id JOIN payout_accounts p ON w.payout_account_id = p.id ORDER BY w.created_at DESC"
+    );
+    res.json(withdrawals);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch withdrawals" });
+  }
+});
+
+app.post("/api/admin/withdrawals/status", async (req, res) => {
+  const { id, status, admin_note } = req.body;
+  try {
+    const withdrawal = await db.get("SELECT * FROM withdrawals WHERE id = ?", id);
+    if (!withdrawal) return res.status(404).json({ error: "Withdrawal not found" });
+
+    if (status === 'REJECTED' && withdrawal.status !== 'REJECTED') {
+      // Refund balance to merchant
+      await db.run("UPDATE merchants SET balance = balance + ? WHERE id = ?", withdrawal.amount, withdrawal.merchant_id);
+    }
+
+    await db.run("UPDATE withdrawals SET status = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", status, admin_note, id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update withdrawal status" });
+  }
+});
+
+// Subscription Plans
+app.get("/api/subscription-plans", async (req, res) => {
+  try {
+    const plans = await db.all("SELECT * FROM subscription_plans WHERE is_active = 1");
+    res.json(plans);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch plans" });
+  }
+});
+
+app.post("/api/admin/subscription-plans", async (req, res) => {
+  const { name, description, price, duration_days, features } = req.body;
+  try {
+    const id = uuidv4();
+    await db.run(
+      "INSERT INTO subscription_plans (id, name, description, price, duration_days, features) VALUES (?, ?, ?, ?, ?, ?)",
+      id, name, description, price, duration_days, JSON.stringify(features)
+    );
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create plan" });
+  }
+});
+
+// Merchant Subscriptions
+app.get("/api/merchant/subscription", async (req, res) => {
+  const { merchantId } = req.query;
+  try {
+    const sub = await db.get(
+      "SELECT s.*, p.name as plan_name FROM subscriptions s JOIN subscription_plans p ON s.plan_id = p.id WHERE s.merchant_id = ? AND s.status = 'ACTIVE' ORDER BY s.created_at DESC LIMIT 1",
+      merchantId
+    );
+    res.json(sub || null);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch subscription" });
+  }
+});
+
+app.post("/api/merchant/subscribe", async (req, res) => {
+  const { merchantId, planId } = req.body;
+  try {
+    const plan = await db.get("SELECT * FROM subscription_plans WHERE id = ?", planId);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+
+    // In a real app, this would initiate a bKash payment using SUPER ADMIN credentials
+    // For this demo, we'll simulate the payment initiation
+    const id = uuidv4();
+    await db.run(
+      "INSERT INTO subscriptions (id, merchant_id, plan_id, status, start_date, end_date) VALUES (?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, datetime('now', '+' || ? || ' days'))",
+      id, merchantId, planId, plan.duration_days
+    );
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to subscribe" });
+  }
+});
+
+app.get("/api/admin/merchant-subscriptions", async (req, res) => {
+  try {
+    const subs = await db.all(
+      "SELECT s.*, m.name as merchant_name, m.email as merchant_email, p.name as plan_name, p.price FROM subscriptions s JOIN merchants m ON s.merchant_id = m.id JOIN subscription_plans p ON s.plan_id = p.id ORDER BY s.created_at DESC"
+    );
+    res.json(subs);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch merchant subscriptions" });
   }
 });
 
@@ -378,39 +732,64 @@ app.post("/api/admin/update-credentials", async (req, res) => {
 });
 
 app.get("/api/admin/stats", async (req, res) => {
-  const totalVolume = await db.get("SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'");
-  const successCount = await db.get("SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'");
-  const recentTransactions = await db.all("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10");
-  
-  res.json({
-    totalVolume: totalVolume?.total || 0,
-    successCount: successCount?.count || 0,
-    recentTransactions,
-  });
+  const { merchantId } = req.query;
+  try {
+    let volumeQuery = "SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'";
+    let countQuery = "SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'";
+    let recentQuery = "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10";
+    const params: any[] = [];
+
+    if (merchantId) {
+      volumeQuery += " AND merchant_id = ?";
+      countQuery += " AND merchant_id = ?";
+      recentQuery = "SELECT * FROM transactions WHERE merchant_id = ? ORDER BY created_at DESC LIMIT 10";
+      params.push(merchantId);
+    }
+
+    const totalVolume = await db.get(volumeQuery, ...params);
+    const successCount = await db.get(countQuery, ...params);
+    const recentTransactions = await db.all(recentQuery, ...params);
+
+    res.json({
+      totalVolume: totalVolume?.total || 0,
+      successCount: successCount?.count || 0,
+      recentTransactions,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
 });
 
 app.get("/api/admin/transactions", async (req, res) => {
-  const { start_date, end_date, search } = req.query;
-  let query = "SELECT * FROM transactions WHERE 1=1";
-  const params: any[] = [];
+  const { start_date, end_date, search, merchantId } = req.query;
+  try {
+    let query = "SELECT * FROM transactions WHERE 1=1";
+    const params: any[] = [];
 
-  if (start_date) {
-    query += " AND DATE(created_at) >= DATE(?)";
-    params.push(start_date);
-  }
-  if (end_date) {
-    query += " AND DATE(created_at) <= DATE(?)";
-    params.push(end_date);
-  }
-  if (search) {
-    query += " AND (trx_id LIKE ? OR merchant_invoice LIKE ? OR customer_msisdn LIKE ?)";
-    const searchParam = `%${search}%`;
-    params.push(searchParam, searchParam, searchParam);
-  }
+    if (merchantId) {
+      query += " AND merchant_id = ?";
+      params.push(merchantId);
+    }
+    if (start_date) {
+      query += " AND DATE(created_at) >= DATE(?)";
+      params.push(start_date);
+    }
+    if (end_date) {
+      query += " AND DATE(created_at) <= DATE(?)";
+      params.push(end_date);
+    }
+    if (search) {
+      query += " AND (trx_id LIKE ? OR merchant_invoice LIKE ? OR customer_msisdn LIKE ?)";
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam);
+    }
 
-  query += " ORDER BY created_at DESC";
-  const transactions = await db.all(query, ...params);
-  res.json(transactions);
+    query += " ORDER BY created_at DESC";
+    const transactions = await db.all(query, ...params);
+    res.json(transactions);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
 });
 
 app.get("/api/admin/settings", async (req, res) => {
@@ -446,6 +825,12 @@ app.post("/api/bkash/refund", async (req, res) => {
     const ip = req.ip || req.headers['x-forwarded-for'] || "";
     const initiated_by = "admin"; // In a real app, this would come from session
     
+    // Check transaction mode
+    const transaction = await db.get("SELECT payment_mode FROM transactions WHERE trx_id = ?", trxID);
+    if (transaction && transaction.payment_mode === 'OWN') {
+      return res.status(403).json({ error: "Refunds for 'Own API' transactions must be handled via the merchant's own bKash panel. Super Admin can only refund Global API payments." });
+    }
+
     // Check if already refunded
     const existing = await db.get("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'", trxID);
     if (existing) {
@@ -601,7 +986,7 @@ app.get("/api/admin/statement", async (req, res) => {
   }
 });
 
-app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req, res) => {
+app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req: any, res) => {
   try {
     const { userId } = req.body;
     if (!req.file) {
@@ -615,7 +1000,7 @@ app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req
   }
 });
 
-app.post("/api/admin/settings/upload-logo", upload.single("logo"), async (req, res) => {
+app.post("/api/admin/settings/upload-logo", upload.single("logo"), async (req: any, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
