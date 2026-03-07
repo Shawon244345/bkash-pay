@@ -26,6 +26,7 @@ import {
   Download,
   Share2,
   AlertCircle,
+  AlertTriangle,
   Menu,
   X,
   RotateCcw,
@@ -207,7 +208,10 @@ interface Transaction {
 interface Stats {
   totalVolume: number;
   successCount: number;
+  failedCount: number;
+  totalCount: number;
   recentTransactions: Transaction[];
+  userActivity: any[];
 }
 
 interface Refund {
@@ -343,9 +347,9 @@ const Dashboard = () => {
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard title="Total Volume" value={formatCurrency(stats?.totalVolume || 0)} icon={TrendingUp} trend={12.5} color="bg-bkash" />
-        <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-rose-600" />
-        <StatCard title="Active Agreements" value="1,284" icon={Users} trend={-2.4} color="bg-pink-600" />
-        <StatCard title="Avg. Ticket Size" value={formatCurrency(stats?.successCount ? (stats.totalVolume / stats.successCount) : 0)} icon={ArrowUpRight} color="bg-rose-500" />
+        <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-emerald-600" />
+        <StatCard title="Failed Payments" value={stats?.failedCount || 0} icon={XCircle} trend={-1.4} color="bg-rose-600" />
+        <StatCard title="Total Transactions" value={stats?.totalCount || 0} icon={Activity} color="bg-zinc-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -372,17 +376,38 @@ const Dashboard = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-          <h3 className="font-bold text-lg mb-6">Payment Methods</h3>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={[{ name: 'bKash', value: 75 }, { name: 'Cards', value: 15 }, { name: 'Other', value: 10 }]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  <Cell fill="#10b981" /><Cell fill="#3b82f6" /><Cell fill="#a855f7" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        <div className="space-y-6">
+          <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
+            <h3 className="font-bold text-lg mb-6">Payment Methods</h3>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={[{ name: 'bKash', value: 75 }, { name: 'Cards', value: 15 }, { name: 'Other', value: 10 }]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    <Cell fill="#10b981" /><Cell fill="#3b82f6" /><Cell fill="#a855f7" />
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          
+          <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+              <Activity size={18} className="text-bkash" />
+              User Activity
+            </h3>
+            <div className="space-y-4">
+              {stats?.userActivity?.map((log, i) => (
+                <div key={i} className="border-l-2 border-bkash/30 pl-3 py-1">
+                  <p className="text-xs font-bold text-zinc-300">{log.action}</p>
+                  <p className="text-[10px] text-zinc-500 truncate">{log.details}</p>
+                  <p className="text-[9px] text-zinc-600 mt-1">{new Date(log.created_at).toLocaleString()}</p>
+                </div>
+              ))}
+              {(!stats?.userActivity || stats.userActivity.length === 0) && (
+                <p className="text-xs text-zinc-500 text-center py-4">No recent activity</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -735,27 +735,46 @@ app.get("/api/admin/stats", async (req, res) => {
   const { merchantId } = req.query;
   try {
     let volumeQuery = "SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'";
-    let countQuery = "SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'";
+    let successCountQuery = "SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'";
+    let failedCountQuery = "SELECT COUNT(*) as count FROM transactions WHERE status = 'FAILED'";
+    let totalCountQuery = "SELECT COUNT(*) as count FROM transactions";
     let recentQuery = "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 10";
+    let activityQuery = "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5";
     const params: any[] = [];
 
     if (merchantId) {
       volumeQuery += " AND merchant_id = ?";
-      countQuery += " AND merchant_id = ?";
+      successCountQuery += " AND merchant_id = ?";
+      failedCountQuery += " AND merchant_id = ?";
+      totalCountQuery += " WHERE merchant_id = ?";
       recentQuery = "SELECT * FROM transactions WHERE merchant_id = ? ORDER BY created_at DESC LIMIT 10";
+      activityQuery = "SELECT * FROM audit_logs WHERE user = ? OR details LIKE ? ORDER BY created_at DESC LIMIT 5";
       params.push(merchantId);
     }
 
     const totalVolume = await db.get(volumeQuery, ...params);
-    const successCount = await db.get(countQuery, ...params);
+    const successCount = await db.get(successCountQuery, ...params);
+    const failedCount = await db.get(failedCountQuery, ...params);
+    const totalCount = await db.get(totalCountQuery, ...params);
     const recentTransactions = await db.all(recentQuery, ...params);
+    
+    let userActivity = [];
+    if (merchantId) {
+      userActivity = await db.all(activityQuery, merchantId, `%${merchantId}%`);
+    } else {
+      userActivity = await db.all(activityQuery);
+    }
 
     res.json({
       totalVolume: totalVolume?.total || 0,
       successCount: successCount?.count || 0,
+      failedCount: failedCount?.count || 0,
+      totalCount: totalCount?.count || 0,
       recentTransactions,
+      userActivity
     });
   } catch (error) {
+    console.error("Stats Fetch Error:", error);
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
