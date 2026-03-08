@@ -304,7 +304,7 @@ const TransactionRow = ({ tx }: { tx: Transaction, key?: string }) => (
     <td className="py-4 px-4 text-right">
       <div className="flex justify-end items-center gap-2">
         <span className="text-zinc-500 text-xs">{new Date(tx.created_at).toLocaleString()}</span>
-        {tx.status === 'completed' && (
+        {tx.status === 'completed' && tx.payment_mode !== 'GLOBAL' && (
           <Link 
             to={`/admin/refunds?trx_id=${tx.trx_id}`}
             className="p-1.5 text-zinc-500 hover:text-bkash transition-colors"
@@ -312,6 +312,11 @@ const TransactionRow = ({ tx }: { tx: Transaction, key?: string }) => (
           >
             <RotateCcw size={14} />
           </Link>
+        )}
+        {tx.payment_mode === 'GLOBAL' && tx.status === 'completed' && (
+          <span className="p-1.5 text-zinc-700 cursor-not-allowed" title="Global API - Non-refundable by Admin">
+            <Lock size={14} />
+          </span>
         )}
       </div>
     </td>
@@ -1859,6 +1864,14 @@ const Refunds = () => {
                     </span>
                   </div>
                 </div>
+                {foundTx.payment_mode === 'GLOBAL' && (
+                  <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={16} />
+                    <p className="text-[10px] text-rose-200/80 leading-relaxed">
+                      <strong>Refund Restricted:</strong> Super Admin cannot process refunds for transactions processed via Global API. These must be managed according to platform policy.
+                    </p>
+                  </div>
+                )}
                 {foundTx.payment_mode === 'OWN' && (
                   <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
@@ -1915,10 +1928,10 @@ const Refunds = () => {
               </div>
               <button 
                 type="submit" 
-                disabled={isProcessing || !foundTx || foundTx.payment_mode === 'OWN'}
+                disabled={isProcessing || !foundTx || foundTx.payment_mode === 'OWN' || foundTx.payment_mode === 'GLOBAL'}
                 className="w-full bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
               >
-                {isProcessing ? <Loader2 className="animate-spin" /> : (foundTx?.payment_mode === 'OWN' ? "Refund Restricted" : "Initiate Refund Request")}
+                {isProcessing ? <Loader2 className="animate-spin" /> : (foundTx?.payment_mode === 'OWN' || foundTx?.payment_mode === 'GLOBAL' ? "Refund Restricted" : "Initiate Refund Request")}
               </button>
             </form>
           </div>
@@ -2210,9 +2223,12 @@ const Subscriptions = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchantId, planId })
       });
-      if (res.ok) {
-        toast.success("Subscribed successfully!");
-        fetchData();
+      const data = await res.json();
+      if (data.bkashURL) {
+        toast.success("Redirecting to bKash for payment...");
+        window.location.href = data.bkashURL;
+      } else {
+        toast.error(data.error || "Subscription failed");
       }
     } catch (err) {
       toast.error("Subscription failed");

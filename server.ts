@@ -670,17 +670,73 @@ app.post("/api/merchant/subscribe", async (req, res) => {
     const plan = await db.get("SELECT * FROM subscription_plans WHERE id = ?", planId);
     if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-    // In a real app, this would initiate a bKash payment using SUPER ADMIN credentials
-    // For this demo, we'll simulate the payment initiation
-    const id = uuidv4();
-    await db.run(
-      "INSERT INTO subscriptions (id, merchant_id, plan_id, status, start_date, end_date) VALUES (?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, datetime('now', '+' || ? || ' days'))",
-      id, merchantId, planId, plan.duration_days
+    const headers = await getBkashHeaders(); // Use Super Admin credentials
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+    const appUrl = await getSetting("APP_URL");
+    
+    const invoice = `SUB-${Date.now()}`;
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/create`,
+      {
+        mode: "0011",
+        payerReference: merchantId,
+        callbackURL: `${appUrl}/api/bkash/subscription-callback?mid=${merchantId}&pid=${planId}`,
+        amount: plan.price.toString(),
+        currency: "BDT",
+        intent: "sale",
+        merchantInvoiceNumber: invoice,
+      },
+      { headers }
     );
-    res.json({ success: true, id });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to subscribe" });
+
+    if (data.paymentID && data.bkashURL) {
+      await db.run(
+        "INSERT INTO subscriptions (id, merchant_id, plan_id, status, payment_id) VALUES (?, ?, ?, ?, ?)",
+        uuidv4(), merchantId, planId, 'PENDING', data.paymentID
+      );
+      res.json({ bkashURL: data.bkashURL });
+    } else {
+      res.status(400).json({ error: data.statusMessage || "Failed to initiate subscription payment" });
+    }
+  } catch (error: any) {
+    console.error("Subscription Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
+});
+
+app.get("/api/bkash/subscription-callback", async (req, res) => {
+  const { paymentID, status, mid, pid } = req.query;
+  const merchantId = mid as string;
+  const planId = pid as string;
+
+  if (status === "success") {
+    try {
+      const headers = await getBkashHeaders();
+      const baseUrl = await getSetting("BKASH_BASE_URL");
+      
+      const { data } = await axios.post(
+        `${baseUrl}/tokenized/checkout/execute`,
+        { paymentID },
+        { headers }
+      );
+
+      if (data.statusCode === "0000") {
+        const plan = await db.get("SELECT duration_days FROM subscription_plans WHERE id = ?", planId);
+        await db.run(
+          "UPDATE subscriptions SET status = 'ACTIVE', trx_id = ?, start_date = CURRENT_TIMESTAMP, end_date = datetime('now', '+' || ? || ' days') WHERE payment_id = ?",
+          data.trxID, plan.duration_days, paymentID
+        );
+        
+        await auditLog("SUBSCRIPTION_SUCCESS", merchantId, `Merchant subscribed to plan ${planId}`);
+        return res.redirect(`/merchant/subscription?status=success&plan=${planId}`);
+      }
+    } catch (error) {
+      console.error("Subscription Execution Error:", error);
+    }
+  }
+  
+  await db.run("UPDATE subscriptions SET status = 'FAILED' WHERE payment_id = ?", paymentID);
+  res.redirect("/merchant/subscription?status=failed");
 });
 
 app.get("/api/admin/merchant-subscriptions", async (req, res) => {
@@ -846,8 +902,8 @@ app.post("/api/bkash/refund", async (req, res) => {
     
     // Check transaction mode
     const transaction = await db.get("SELECT payment_mode FROM transactions WHERE trx_id = ?", trxID);
-    if (transaction && transaction.payment_mode === 'OWN') {
-      return res.status(403).json({ error: "Refunds for 'Own API' transactions must be handled via the merchant's own bKash panel. Super Admin can only refund Global API payments." });
+    if (transaction && transaction.payment_mode === 'GLOBAL') {
+      return res.status(403).json({ error: "Super Admin cannot process refunds for transactions processed via Global API. These must be managed according to platform policy." });
     }
 
     // Check if already refunded
