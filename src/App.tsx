@@ -66,6 +66,11 @@ import {
   Plus,
   Trash,
   Check,
+  ZapOff,
+  Smartphone,
+  Shield,
+  UserX,
+  UserCheck,
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -237,40 +242,48 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
     className={cn(
-      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+      "w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group relative",
       active 
-        ? "bg-bkash/10 text-bkash" 
-        : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-bkash-dark hover:text-zinc-900 dark:hover:text-white"
+        ? "bg-bkash text-white shadow-lg shadow-bkash/20" 
+        : "text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-900 hover:text-surface-900 dark:hover:text-white"
     )}
   >
-    <Icon size={20} className={cn("transition-transform duration-200", active ? "scale-110" : "group-hover:scale-110")} />
-    <span className="font-medium">{label}</span>
-    {active && <motion.div layoutId="active-pill" className="ml-auto w-1.5 h-1.5 rounded-full bg-bkash" />}
+    <Icon size={18} className={cn("transition-all duration-300", active ? "scale-110" : "group-hover:scale-110 group-hover:text-bkash")} />
+    <span className={cn("font-semibold text-sm tracking-tight transition-all duration-300", active ? "translate-x-1" : "group-hover:translate-x-1")}>{label}</span>
+    {active && (
+      <motion.div 
+        layoutId="active-indicator" 
+        className="absolute left-0 w-1 h-6 bg-white rounded-r-full" 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      />
+    )}
   </button>
 );
 
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="bg-white dark:bg-bkash-dark/50 border border-zinc-200 dark:border-bkash-dark p-6 rounded-3xl backdrop-blur-sm shadow-sm dark:shadow-none"
+    whileHover={{ y: -5 }}
+    className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 p-6 rounded-[2rem] shadow-sm hover:shadow-xl hover:shadow-bkash/5 transition-all duration-300 group"
   >
     <div className="flex justify-between items-start mb-4">
-      <div className={cn("p-3 rounded-2xl", color || "bg-bkash/10 text-bkash")}>
-        <Icon size={24} className={color ? "text-white" : ""} />
+      <div className={cn("p-3 rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-lg shadow-bkash/10", color || "bg-bkash")}>
+        <Icon className="text-white" size={24} />
       </div>
-      {trend && (
+      {trend !== undefined && (
         <div className={cn(
-          "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
-          trend > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+          "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase",
+          trend >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
         )}>
-          {trend > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+          {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
           {Math.abs(trend)}%
         </div>
       )}
     </div>
-    <h4 className="text-zinc-500 dark:text-zinc-400 text-xs font-black uppercase tracking-widest mb-1">{title}</h4>
-    <p className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white">{value}</p>
+    <div>
+      <p className="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+      <h3 className="text-2xl md:text-3xl font-black tracking-tighter">{value}</h3>
+    </div>
   </motion.div>
 );
 
@@ -346,21 +359,27 @@ const Dashboard = () => {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="space-y-8"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-10"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Volume" value={formatCurrency(stats?.totalVolume || 0)} icon={TrendingUp} trend={12.5} color="bg-bkash" />
         <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-emerald-600" />
         <StatCard title="Failed Payments" value={stats?.failedCount || 0} icon={XCircle} trend={-1.4} color="bg-rose-600" />
-        <StatCard title="Total Transactions" value={stats?.totalCount || 0} icon={Activity} color="bg-zinc-600" />
+        <StatCard title="Total Transactions" value={stats?.totalCount || 0} icon={Activity} color="bg-surface-600" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-          <h3 className="font-bold text-lg mb-6">Revenue Growth</h3>
-          <div className="h-[300px] w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] p-8 shadow-sm">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="font-black text-xl tracking-tighter">Revenue Growth</h3>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-emerald-500 rounded-full" />
+              <span className="text-xs font-bold text-surface-500 uppercase tracking-widest">Revenue</span>
+            </div>
+          </div>
+          <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={[
                 { name: 'Mon', value: 4000 }, { name: 'Tue', value: 3000 }, { name: 'Wed', value: 5000 },
@@ -368,72 +387,95 @@ const Dashboard = () => {
               ]}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `৳${v}`} />
-                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
-                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" dark:stroke="#18181b" vertical={false} />
+                <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `৳${v}`} dx={-10} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '16px', backdropFilter: 'blur(8px)', color: '#fff' }}
+                  itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
+                />
+                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="space-y-6">
-          <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-            <h3 className="font-bold text-lg mb-6">Payment Methods</h3>
-            <div className="h-[200px] w-full">
+        <div className="space-y-8">
+          <div className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] p-8 shadow-sm">
+            <h3 className="font-black text-xl tracking-tighter mb-8">Payment Methods</h3>
+            <div className="h-[220px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={[{ name: 'bKash', value: 75 }, { name: 'Cards', value: 15 }, { name: 'Other', value: 10 }]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                    <Cell fill="#10b981" /><Cell fill="#3b82f6" /><Cell fill="#a855f7" />
+                  <Pie data={[{ name: 'bKash', value: 75 }, { name: 'Cards', value: 15 }, { name: 'Other', value: 10 }]} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value">
+                    <Cell fill="#e2136e" stroke="none" /><Cell fill="#3b82f6" stroke="none" /><Cell fill="#a855f7" stroke="none" />
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
             </div>
+            <div className="flex justify-center gap-6 mt-6">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-bkash rounded-full" />
+                <span className="text-[10px] font-bold text-surface-500 uppercase tracking-widest">bKash</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
+                <span className="text-[10px] font-bold text-surface-500 uppercase tracking-widest">Cards</span>
+              </div>
+            </div>
           </div>
           
-          <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Activity size={18} className="text-bkash" />
+          <div className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] p-8 shadow-sm">
+            <h3 className="font-black text-xl tracking-tighter mb-6 flex items-center gap-3">
+              <div className="p-2 bg-bkash/10 rounded-xl">
+                <Activity size={20} className="text-bkash" />
+              </div>
               User Activity
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {stats?.userActivity?.map((log, i) => (
-                <div key={i} className="border-l-2 border-bkash/30 pl-3 py-1">
-                  <p className="text-xs font-bold text-zinc-300">{log.action}</p>
-                  <p className="text-[10px] text-zinc-500 truncate">{log.details}</p>
-                  <p className="text-[9px] text-zinc-600 mt-1">{new Date(log.created_at).toLocaleString()}</p>
+                <div key={i} className="relative pl-6 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-0.5 before:bg-surface-200 dark:before:bg-surface-800 last:before:hidden">
+                  <div className="absolute left-[-3px] top-1.5 w-2 h-2 bg-bkash rounded-full shadow-lg shadow-bkash/40" />
+                  <p className="text-sm font-black text-surface-900 dark:text-white leading-none">{log.action}</p>
+                  <p className="text-xs text-surface-500 mt-1.5 font-medium">{log.details}</p>
+                  <p className="text-[10px] text-surface-400 mt-2 font-bold uppercase tracking-widest">{new Date(log.created_at).toLocaleTimeString()}</p>
                 </div>
               ))}
               {(!stats?.userActivity || stats.userActivity.length === 0) && (
-                <p className="text-xs text-zinc-500 text-center py-4">No recent activity</p>
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 bg-surface-100 dark:bg-surface-900 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <History className="text-surface-400" size={24} />
+                  </div>
+                  <p className="text-xs text-surface-500 font-bold uppercase tracking-widest">No recent activity</p>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-bkash-dark flex justify-between items-center">
-          <h3 className="font-bold text-lg">Recent Transactions</h3>
-          <Link to="/admin/transactions" className="text-bkash text-sm font-medium hover:underline flex items-center gap-1">View all <ChevronRight size={16} /></Link>
+      <div className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] overflow-hidden shadow-sm">
+        <div className="p-8 border-b border-surface-100 dark:border-surface-900 flex justify-between items-center">
+          <h3 className="font-black text-2xl tracking-tighter">Recent Transactions</h3>
+          <Link to="/admin/transactions" className="bg-surface-100 dark:bg-surface-900 hover:bg-bkash hover:text-white text-surface-600 dark:text-surface-400 text-xs font-black px-6 py-3 rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest">
+            View all <ChevronRight size={14} />
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-bkash-dark/50 text-zinc-500 text-xs uppercase tracking-wider">
+            <thead className="bg-surface-50 dark:bg-surface-900/50 text-surface-400 text-[10px] uppercase tracking-widest font-black">
               <tr>
-                <th className="py-3 px-4 font-semibold">Invoice / ID</th>
-                <th className="py-3 px-4 font-semibold">Customer</th>
-                <th className="py-3 px-4 font-semibold">Amount</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold text-right">Date</th>
+                <th className="py-5 px-8">Invoice / ID</th>
+                <th className="py-5 px-8">Customer</th>
+                <th className="py-5 px-8">Amount</th>
+                <th className="py-5 px-8">Status</th>
+                <th className="py-5 px-8 text-right">Date</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-900">
               {stats?.recentTransactions.map((tx: Transaction) => <TransactionRow key={tx.id} tx={tx} />)}
             </tbody>
           </table>
@@ -1767,13 +1809,19 @@ const Refunds = () => {
     if (!foundTx) return;
     setShowConfirmRefund(false);
     setIsProcessing(true);
+    
+    const userRole = localStorage.getItem("userRole");
+    const merchantId = localStorage.getItem("merchant_id");
+
     try {
       const payload = {
         paymentID: foundTx.payment_id,
         trxID: foundTx.trx_id,
         amount: refundForm.amount,
         sku: refundForm.sku,
-        reason: refundForm.reason
+        reason: refundForm.reason,
+        userRole,
+        merchantId
       };
 
       if (!isOnline) {
@@ -1864,19 +1912,19 @@ const Refunds = () => {
                     </span>
                   </div>
                 </div>
-                {foundTx.payment_mode === 'GLOBAL' && (
+                {localStorage.getItem("userRole") === 'admin' && foundTx.merchant_id && (
                   <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={16} />
                     <p className="text-[10px] text-rose-200/80 leading-relaxed">
-                      <strong>Refund Restricted:</strong> Super Admin cannot process refunds for transactions processed via Global API. These must be managed according to platform policy.
+                      <strong>Refund Restricted:</strong> Super Admin cannot process refunds for transactions belonging to merchants. Merchants must handle their own refunds.
                     </p>
                   </div>
                 )}
-                {foundTx.payment_mode === 'OWN' && (
+                {localStorage.getItem("userRole") === 'merchant' && foundTx.payment_mode === 'OWN' && (
                   <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
                     <p className="text-[10px] text-amber-200/80 leading-relaxed">
-                      <strong>Refund Restricted:</strong> This transaction was processed using the merchant's own bKash credentials. Refunds must be handled directly through the merchant's bKash panel.
+                      <strong>Refund Restricted:</strong> This transaction was processed using your own bKash credentials. Refunds must be handled directly through your bKash merchant panel.
                     </p>
                   </div>
                 )}
@@ -1928,10 +1976,20 @@ const Refunds = () => {
               </div>
               <button 
                 type="submit" 
-                disabled={isProcessing || !foundTx || foundTx.payment_mode === 'OWN' || foundTx.payment_mode === 'GLOBAL'}
+                disabled={
+                  isProcessing || 
+                  !foundTx || 
+                  (localStorage.getItem("userRole") === 'admin' && foundTx.merchant_id) ||
+                  (localStorage.getItem("userRole") === 'merchant' && foundTx.payment_mode === 'OWN')
+                }
                 className="w-full bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
               >
-                {isProcessing ? <Loader2 className="animate-spin" /> : (foundTx?.payment_mode === 'OWN' || foundTx?.payment_mode === 'GLOBAL' ? "Refund Restricted" : "Initiate Refund Request")}
+                {isProcessing ? <Loader2 className="animate-spin" /> : (
+                  (localStorage.getItem("userRole") === 'admin' && foundTx?.merchant_id) || 
+                  (localStorage.getItem("userRole") === 'merchant' && foundTx?.payment_mode === 'OWN')
+                  ? "Refund Restricted" 
+                  : "Initiate Refund Request"
+                )}
               </button>
             </form>
           </div>
@@ -2351,7 +2409,7 @@ const AdminPlans = () => {
         })
       });
       if (res.ok) {
-        toast.success("Plan created");
+        toast.success("Plan created successfully");
         setShowAdd(false);
         setNewPlan({ name: '', description: '', price: '', duration_days: '30', features: '' });
         fetchData();
@@ -2362,72 +2420,125 @@ const AdminPlans = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h3 className="text-2xl font-black">Subscription Plans</h3>
-        <button onClick={() => setShowAdd(true)} className="bg-bkash hover:bg-bkash/90 text-white font-bold px-6 py-3 rounded-2xl flex items-center gap-2 transition-all">
-          <Plus size={20} /> Create Plan
+    <div className="space-y-12 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <h3 className="text-3xl md:text-5xl font-black tracking-tighter">Subscription Plans</h3>
+          <p className="text-surface-500 font-medium mt-2">Manage your service offerings and merchant tiers.</p>
+        </div>
+        <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-3 w-full md:w-auto justify-center">
+          <Plus size={24} /> Create New Plan
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {plans.map(plan => (
-          <div key={plan.id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-            <h4 className="text-xl font-black mb-2">{plan.name}</h4>
-            <div className="text-2xl font-black text-bkash mb-4">৳{plan.price}</div>
-            <p className="text-zinc-500 text-sm mb-6">{plan.description}</p>
-            <div className="space-y-2">
-              {JSON.parse(plan.features || '[]').map((f: string, i: number) => (
-                <div key={i} className="text-xs text-zinc-400 flex items-center gap-2">
-                  <Check size={12} className="text-emerald-500" /> {f}
+          <motion.div 
+            key={plan.id} 
+            whileHover={{ y: -10 }}
+            className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] p-10 shadow-sm hover:shadow-2xl hover:shadow-bkash/5 transition-all duration-500 group relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-bkash/5 rounded-bl-[5rem] -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150" />
+            
+            <div className="relative">
+              <div className="flex justify-between items-start mb-8">
+                <div className="p-4 bg-bkash/10 rounded-2xl">
+                  <Zap className="text-bkash" size={32} />
                 </div>
-              ))}
+                <div className="text-right">
+                  <div className="text-4xl font-black tracking-tighter text-bkash">৳{plan.price}</div>
+                  <div className="text-[10px] font-black text-surface-400 uppercase tracking-widest mt-1">Per {plan.duration_days} Days</div>
+                </div>
+              </div>
+              
+              <h4 className="text-2xl font-black tracking-tight mb-3 group-hover:text-bkash transition-colors">{plan.name}</h4>
+              <p className="text-surface-500 text-sm font-medium mb-8 leading-relaxed">{plan.description}</p>
+              
+              <div className="space-y-4 pt-8 border-t border-surface-100 dark:border-surface-900">
+                <p className="text-[10px] font-black text-surface-400 uppercase tracking-widest">What's included</p>
+                {JSON.parse(plan.features || '[]').map((f: string, i: number) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="w-5 h-5 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0">
+                      <Check size={12} className="text-emerald-500" />
+                    </div>
+                    <span className="text-sm font-bold text-surface-700 dark:text-surface-300">{f}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </motion.div>
         ))}
+        {plans.length === 0 && (
+          <div className="col-span-full py-20 bg-surface-100 dark:bg-surface-900/50 rounded-[3rem] border-2 border-dashed border-surface-200 dark:border-surface-800 flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 bg-surface-200 dark:bg-surface-800 rounded-[2rem] flex items-center justify-center mb-6">
+              <Zap className="text-surface-400" size={40} />
+            </div>
+            <h4 className="text-xl font-black tracking-tight mb-2">No Plans Created Yet</h4>
+            <p className="text-surface-500 font-medium max-w-xs">Start by creating your first subscription plan to monetize your platform.</p>
+          </div>
+        )}
       </div>
 
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-bkash-dark">
-          <h3 className="font-bold text-lg">Merchant Subscriptions</h3>
+      <div className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[3rem] overflow-hidden shadow-sm">
+        <div className="p-10 border-b border-surface-100 dark:border-surface-900 flex justify-between items-center bg-surface-50/50 dark:bg-surface-900/30">
+          <div>
+            <h3 className="text-2xl font-black tracking-tighter">Merchant Subscriptions</h3>
+            <p className="text-sm text-surface-500 font-medium mt-1">Monitor active subscriptions across your merchant network.</p>
+          </div>
+          <div className="p-3 bg-surface-100 dark:bg-surface-800 rounded-2xl">
+            <Users className="text-surface-400" size={24} />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+            <thead className="bg-surface-50 dark:bg-surface-900/50 text-surface-400 text-[10px] uppercase tracking-widest font-black">
               <tr>
-                <th className="py-4 px-6 font-semibold">Merchant</th>
-                <th className="py-4 px-6 font-semibold">Plan</th>
-                <th className="py-4 px-6 font-semibold">Status</th>
-                <th className="py-4 px-6 font-semibold">Expiry</th>
+                <th className="py-6 px-10">Merchant Details</th>
+                <th className="py-6 px-10">Plan Details</th>
+                <th className="py-6 px-10">Status</th>
+                <th className="py-6 px-10 text-right">Expiry Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-900">
               {merchantSubs.map(sub => (
-                <tr key={sub.id} className="hover:bg-white/5 transition-colors">
-                  <td className="py-4 px-6">
-                    <div className="text-sm font-bold">{sub.merchant_name}</div>
-                    <div className="text-[10px] text-zinc-500">{sub.merchant_email}</div>
+                <tr key={sub.id} className="group hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors">
+                  <td className="py-6 px-10">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-bkash/10 rounded-xl flex items-center justify-center text-bkash font-black text-sm">
+                        {sub.merchant_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{sub.merchant_name}</div>
+                        <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">{sub.merchant_email}</div>
+                      </div>
+                    </div>
                   </td>
-                  <td className="py-4 px-6">
-                    <div className="text-xs font-bold">{sub.plan_name}</div>
-                    <div className="text-[10px] text-zinc-500">৳{sub.price}</div>
+                  <td className="py-6 px-10">
+                    <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{sub.plan_name}</div>
+                    <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">৳{sub.price} / {sub.duration_days} Days</div>
                   </td>
-                  <td className="py-4 px-6">
+                  <td className="py-6 px-10">
                     <span className={cn(
-                      "text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest",
-                      sub.status === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-500/10 text-zinc-500"
+                      "text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest border transition-all duration-300",
+                      sub.status === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-surface-100 dark:bg-surface-800 text-surface-500 border-surface-200 dark:border-surface-700"
                     )}>
                       {sub.status}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-xs text-zinc-400">
-                    {new Date(sub.end_date).toLocaleDateString()}
+                  <td className="py-6 px-10 text-right">
+                    <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{new Date(sub.end_date).toLocaleDateString()}</div>
+                    <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">Valid Until</div>
                   </td>
                 </tr>
               ))}
               {merchantSubs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-zinc-500 text-sm">No active merchant subscriptions found.</td>
+                  <td colSpan={4} className="py-20 text-center">
+                    <div className="w-16 h-16 bg-surface-100 dark:bg-surface-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <ZapOff className="text-surface-400" size={32} />
+                    </div>
+                    <p className="text-sm text-surface-500 font-bold uppercase tracking-widest">No active subscriptions found</p>
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -2437,13 +2548,23 @@ const AdminPlans = () => {
 
       <AnimatePresence>
         {showAdd && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-              <h3 className="text-xl font-black mb-6">Create New Plan</h3>
-              <form onSubmit={handleAdd} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Plan Name</label>
-                  <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              className="w-full max-w-xl bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[3rem] p-10 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black tracking-tighter">Create New Plan</h3>
+                <button onClick={() => setShowAdd(false)} className="p-2 hover:bg-surface-100 dark:hover:bg-surface-900 rounded-xl transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black text-surface-500 uppercase tracking-widest ml-1">Plan Name</label>
+                  <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="input-field" placeholder="e.g. Professional Tier" required />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase">Description</label>
@@ -2505,7 +2626,7 @@ const AdminWithdrawals = () => {
         body: JSON.stringify({ id, status, admin_note: note })
       });
       if (res.ok) {
-        toast.success(`Withdrawal ${status.toLowerCase()}`);
+        toast.success(`Withdrawal ${status.toLowerCase()} successfully`);
         fetchWithdrawals();
       }
     } catch (err) {
@@ -2514,64 +2635,487 @@ const AdminWithdrawals = () => {
   };
 
   return (
-    <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
-      <div className="p-6 border-b border-bkash-dark">
-        <h3 className="font-bold text-lg">Withdrawal Requests</h3>
+    <div className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[2.5rem] overflow-hidden shadow-sm">
+      <div className="p-10 border-b border-surface-100 dark:border-surface-900 flex justify-between items-center bg-surface-50/50 dark:bg-surface-900/30">
+        <div>
+          <h3 className="text-2xl font-black tracking-tighter">Withdrawal Requests</h3>
+          <p className="text-sm text-surface-500 font-medium mt-1">Review and process merchant payout requests.</p>
+        </div>
+        <div className="p-3 bg-surface-100 dark:bg-surface-800 rounded-2xl">
+          <Wallet className="text-surface-400" size={24} />
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+          <thead className="bg-surface-50 dark:bg-surface-900/50 text-surface-400 text-[10px] uppercase tracking-widest font-black">
             <tr>
-              <th className="py-4 px-6 font-semibold">Merchant</th>
-              <th className="py-4 px-6 font-semibold">Account Info</th>
-              <th className="py-4 px-6 font-semibold">Amount</th>
-              <th className="py-4 px-6 font-semibold">Status</th>
-              <th className="py-4 px-6 font-semibold text-right">Actions</th>
+              <th className="py-6 px-10">Merchant</th>
+              <th className="py-6 px-10">Account Info</th>
+              <th className="py-6 px-10">Amount</th>
+              <th className="py-6 px-10">Status</th>
+              <th className="py-6 px-10 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/50">
+          <tbody className="divide-y divide-surface-100 dark:divide-surface-900">
             {withdrawals.map(w => (
-              <tr key={w.id} className="hover:bg-white/5 transition-colors">
-                <td className="py-4 px-6">
-                  <div className="text-sm font-bold">{w.merchant_name}</div>
-                  <div className="text-[10px] text-zinc-500">{new Date(w.created_at).toLocaleString()}</div>
+              <tr key={w.id} className="group hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors">
+                <td className="py-6 px-10">
+                  <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{w.merchant_name}</div>
+                  <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">{new Date(w.created_at).toLocaleString()}</div>
                 </td>
-                <td className="py-4 px-6">
-                  <div className="text-xs font-bold">{w.provider} ({w.account_type})</div>
-                  <div className="text-[10px] text-zinc-500 font-mono">{w.account_number}</div>
-                  {w.account_type === 'BANK' && (
-                    <div className="text-[10px] text-zinc-400 mt-1">
-                      <div>Name: {w.account_name}</div>
-                      <div>Branch: {w.bank_branch}</div>
-                      <div>Routing: {w.routing_number}</div>
+                <td className="py-6 px-10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-surface-100 dark:bg-surface-800 rounded-lg flex items-center justify-center text-surface-400">
+                      {w.account_type === 'BANK' ? <Building2 size={16} /> : <Smartphone size={16} />}
                     </div>
-                  )}
+                    <div>
+                      <div className="text-xs font-black text-surface-700 dark:text-surface-300 uppercase tracking-tight">{w.provider} ({w.account_type})</div>
+                      <div className="text-[10px] text-surface-500 font-mono mt-0.5">{w.account_number}</div>
+                    </div>
+                  </div>
                 </td>
-                <td className="py-4 px-6 font-bold text-sm">৳{w.amount}</td>
-                <td className="py-4 px-6">
+                <td className="py-6 px-10">
+                  <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">৳{w.amount.toLocaleString()}</div>
+                  <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">Payout Amount</div>
+                </td>
+                <td className="py-6 px-10">
                   <span className={cn(
-                    "text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest",
-                    w.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-500" :
-                    w.status === 'PENDING' ? "bg-amber-500/10 text-amber-500" :
-                    w.status === 'REJECTED' ? "bg-rose-500/10 text-rose-500" :
-                    "bg-zinc-500/10 text-zinc-500"
+                    "text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest border transition-all duration-300",
+                    w.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                    w.status === 'PENDING' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                    w.status === 'REJECTED' ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
+                    "bg-surface-100 dark:bg-surface-800 text-surface-500 border-surface-200 dark:border-surface-700"
                   )}>
                     {w.status}
                   </span>
                 </td>
-                <td className="py-4 px-6 text-right">
+                <td className="py-6 px-10 text-right">
                   {w.status === 'PENDING' && (
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => handleStatus(w.id, 'COMPLETED')} className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Approve</button>
-                      <button onClick={() => handleStatus(w.id, 'REJECTED')} className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Reject</button>
+                      <button onClick={() => handleStatus(w.id, 'COMPLETED')} className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all active:scale-95">Approve</button>
+                      <button onClick={() => handleStatus(w.id, 'REJECTED')} className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all active:scale-95">Reject</button>
                     </div>
                   )}
                 </td>
               </tr>
             ))}
+            {withdrawals.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-20 text-center">
+                  <div className="w-16 h-16 bg-surface-100 dark:bg-surface-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Wallet className="text-surface-400" size={32} />
+                  </div>
+                  <p className="text-sm text-surface-500 font-bold uppercase tracking-widest">No withdrawal requests found</p>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+const MerchantManagement = () => {
+  const [merchants, setMerchants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingPermissions, setEditingPermissions] = useState<any>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+
+  const fetchMerchants = async () => {
+    try {
+      const res = await fetch("/api/admin/merchants");
+      const data = await res.json();
+      setMerchants(data);
+    } catch (err) {
+      toast.error("Failed to fetch merchants");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMerchants();
+  }, []);
+
+  const handleStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch("/api/admin/merchants/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status })
+      });
+      if (res.ok) {
+        toast.success(`Merchant ${status.toLowerCase()}`);
+        fetchMerchants();
+      }
+    } catch (err) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleKycVerify = async (id: string, status: string) => {
+    try {
+      const res = await fetch("/api/admin/merchants/kyc-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status })
+      });
+      if (res.ok) {
+        toast.success(`KYC ${status.toLowerCase()}`);
+        fetchMerchants();
+      }
+    } catch (err) {
+      toast.error("Failed to verify KYC");
+    }
+  };
+
+  const openPermissions = (merchant: any) => {
+    setEditingPermissions(merchant);
+    setSelectedPermissions(merchant.permissions ? JSON.parse(merchant.permissions) : []);
+  };
+
+  const savePermissions = async () => {
+    try {
+      const res = await fetch("/api/admin/merchants/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingPermissions.id, permissions: selectedPermissions })
+      });
+      if (res.ok) {
+        toast.success("Permissions updated");
+        setEditingPermissions(null);
+        fetchMerchants();
+      }
+    } catch (err) {
+      toast.error("Failed to update permissions");
+    }
+  };
+
+  const togglePermission = (perm: string) => {
+    setSelectedPermissions(prev => 
+      prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
+    );
+  };
+
+  const allTabs = [
+    'dashboard', 'transactions', 'search', 'refunds', 'logs', 'audit-logs', 
+    'profile', 'analytics', 'customers', 'statements', 'security', 
+    'user-management', 'api-docs', 'withdrawals', 'subscriptions', 'settings'
+  ];
+
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-bkash" /></div>;
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
+        <div className="p-6 border-b border-bkash-dark">
+          <h3 className="font-bold text-lg">Merchant Management</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-surface-50 dark:bg-surface-900/50 text-surface-400 text-[10px] uppercase tracking-widest font-black">
+              <tr>
+                <th className="py-6 px-10">Merchant Details</th>
+                <th className="py-6 px-10">KYC Status</th>
+                <th className="py-6 px-10">Account Status</th>
+                <th className="py-6 px-10 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/50">
+              {merchants.map(m => (
+                <tr key={m.id} className="group hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors">
+                  <td className="py-6 px-10">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-bkash/10 rounded-xl flex items-center justify-center text-bkash font-black text-sm">
+                        {m.name?.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{m.name}</div>
+                        <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">{m.email}</div>
+                        <div className="mt-2 flex gap-2">
+                          <span className="text-[9px] bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded-lg text-surface-500 font-black uppercase tracking-tighter border border-surface-200 dark:border-surface-700">{m.payment_mode} API</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-6 px-10">
+                    <div className="flex flex-col gap-2">
+                      <span className={cn(
+                        "text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest border transition-all duration-300 w-fit",
+                        m.kyc_status === 'VERIFIED' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                        m.kyc_status === 'SUBMITTED' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                        m.kyc_status === 'REJECTED' ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
+                        "bg-surface-100 dark:bg-surface-800 text-surface-500 border-surface-200 dark:border-surface-700"
+                      )}>
+                        {m.kyc_status}
+                      </span>
+                      {m.kyc_details && (
+                        <button 
+                          onClick={() => alert(`KYC Details:\n${JSON.stringify(JSON.parse(m.kyc_details), null, 2)}`)}
+                          className="text-[10px] text-bkash hover:underline font-black uppercase tracking-widest text-left ml-1"
+                        >
+                          View Documents
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-6 px-10">
+                    <span className={cn(
+                      "text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest border transition-all duration-300",
+                      m.status === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                    )}>
+                      {m.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => openPermissions(m)} className="p-2 text-zinc-400 hover:text-white transition-colors" title="Permissions">
+                        <ShieldCheck size={16} />
+                      </button>
+                      {m.kyc_status === 'SUBMITTED' && (
+                        <>
+                          <button onClick={() => handleKycVerify(m.id, 'VERIFIED')} className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Verify KYC</button>
+                          <button onClick={() => handleKycVerify(m.id, 'REJECTED')} className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">Reject KYC</button>
+                        </>
+                      )}
+                      <button 
+                        onClick={() => handleStatus(m.id, m.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')}
+                        className={cn(
+                          "text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all",
+                          m.status === 'ACTIVE' ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white" : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                        )}
+                      >
+                        {m.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {editingPermissions && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-xl font-black">Manage Permissions</h3>
+                  <p className="text-xs text-zinc-500">{editingPermissions.name}</p>
+                </div>
+                <button onClick={() => setEditingPermissions(null)} className="p-2 text-zinc-500 hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+                {allTabs.map(tab => (
+                  <button 
+                    key={tab}
+                    onClick={() => togglePermission(tab)}
+                    className={cn(
+                      "px-4 py-3 rounded-xl text-xs font-bold transition-all border text-left flex items-center justify-between",
+                      selectedPermissions.includes(tab) 
+                        ? "bg-bkash/10 border-bkash text-bkash" 
+                        : "bg-black border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                    )}
+                  >
+                    <span className="capitalize">{tab.replace('-', ' ')}</span>
+                    {selectedPermissions.includes(tab) && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setEditingPermissions(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all">Cancel</button>
+                <button onClick={savePermissions} className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all">Save Changes</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const KYCVerification = () => {
+  const [kyc, setKyc] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    nid: '',
+    passport: '',
+    trade_license: '',
+    contact_number: ''
+  });
+  const merchantId = localStorage.getItem("merchant_id");
+
+  const fetchKyc = async () => {
+    try {
+      const res = await fetch(`/api/merchant/kyc?merchantId=${merchantId}`);
+      const data = await res.json();
+      setKyc(data);
+      if (data.kyc_details) {
+        setForm(JSON.parse(data.kyc_details));
+      }
+    } catch (err) {
+      toast.error("Failed to fetch KYC status");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchKyc();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/merchant/kyc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantId, details: form })
+      });
+      if (res.ok) {
+        toast.success("KYC submitted for verification successfully");
+        fetchKyc();
+      }
+    } catch (err) {
+      toast.error("Failed to submit KYC");
+    }
+  };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="w-16 h-16 border-4 border-bkash/20 border-t-bkash rounded-full animate-spin" />
+      <p className="text-sm font-black text-surface-500 uppercase tracking-widest">Loading Verification Status...</p>
+    </div>
+  );
+
+  return (
+    <div className="max-w-3xl mx-auto pb-20">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 rounded-[3rem] overflow-hidden shadow-sm"
+      >
+        <div className="bg-bkash p-12 text-white relative overflow-hidden">
+          <div className="relative z-10">
+            <div className="flex items-center gap-6 mb-4">
+              <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center shadow-2xl shadow-black/10">
+                <ShieldCheck className="text-bkash" size={32} />
+              </div>
+              <div>
+                <h2 className="text-3xl font-black tracking-tighter">KYC Verification</h2>
+                <p className="opacity-80 text-sm font-bold uppercase tracking-widest mt-1">Identity & Business Verification</p>
+              </div>
+            </div>
+            <p className="opacity-70 text-sm font-medium max-w-md">Complete your profile verification to unlock higher transaction limits and premium features.</p>
+          </div>
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+        </div>
+
+        <div className="p-12">
+          {kyc?.kyc_status === 'VERIFIED' ? (
+            <div className="text-center py-16 space-y-6">
+              <div className="w-24 h-24 bg-emerald-500/10 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/5">
+                <CheckCircle2 className="text-emerald-500" size={56} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-black tracking-tighter">Identity Verified</h3>
+                <p className="text-surface-500 font-medium text-lg">Your account is fully verified. You have access to all features.</p>
+              </div>
+              <div className="pt-6">
+                <span className="bg-emerald-500/10 text-emerald-500 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                  Verified Merchant
+                </span>
+              </div>
+            </div>
+          ) : kyc?.kyc_status === 'SUBMITTED' ? (
+            <div className="text-center py-16 space-y-6">
+              <div className="w-24 h-24 bg-amber-500/10 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-amber-500/5">
+                <Clock className="text-amber-500" size={56} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-black tracking-tighter">Verification Pending</h3>
+                <p className="text-surface-500 font-medium text-lg">Our compliance team is currently reviewing your documents.</p>
+              </div>
+              <p className="text-xs text-surface-400 font-bold uppercase tracking-widest">Estimated time: 24-48 hours</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-10">
+              {kyc?.kyc_status === 'REJECTED' && (
+                <motion.div 
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  className="p-6 bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 rounded-3xl flex items-start gap-4"
+                >
+                  <AlertCircle className="text-rose-500 shrink-0 mt-1" size={24} />
+                  <div>
+                    <h4 className="text-rose-500 font-black text-sm uppercase tracking-widest mb-1">Verification Rejected</h4>
+                    <p className="text-sm text-surface-600 dark:text-surface-400 font-medium leading-relaxed">Your previous attempt was not successful. Please ensure all documents are clear and valid before resubmitting.</p>
+                  </div>
+                </motion.div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-surface-500 uppercase tracking-[0.2em] ml-1">National ID Number</label>
+                  <input 
+                    type="text" 
+                    value={form.nid} 
+                    onChange={e => setForm({...form, nid: e.target.value})} 
+                    className="input-field py-5" 
+                    placeholder="Enter your 10 or 17 digit NID"
+                    required 
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-surface-500 uppercase tracking-[0.2em] ml-1">Passport Number (Optional)</label>
+                  <input 
+                    type="text" 
+                    value={form.passport} 
+                    onChange={e => setForm({...form, passport: e.target.value})} 
+                    className="input-field py-5" 
+                    placeholder="Enter passport number if available"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-surface-500 uppercase tracking-[0.2em] ml-1">Trade License Number</label>
+                <input 
+                  type="text" 
+                  value={form.trade_license} 
+                  onChange={e => setForm({...form, trade_license: e.target.value})} 
+                  className="input-field py-5" 
+                  placeholder="Enter your business trade license number"
+                  required 
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-surface-500 uppercase tracking-[0.2em] ml-1">Contact Number</label>
+                <input 
+                  type="tel" 
+                  value={form.contact_number} 
+                  onChange={e => setForm({...form, contact_number: e.target.value})} 
+                  className="input-field py-5" 
+                  placeholder="+880 1XXX XXXXXX"
+                  required 
+                />
+              </div>
+
+              <button type="submit" className="btn-primary w-full py-6 text-sm uppercase tracking-widest flex items-center justify-center gap-4">
+                Submit for Verification <ShieldCheck size={24} />
+              </button>
+            </form>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 };
@@ -2581,10 +3125,11 @@ const PayoutAccounts = () => {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newAccount, setNewAccount] = useState({
-    type: 'MFS',
     provider: 'bKash',
+    type: 'PERSONAL',
     account_number: '',
     account_name: '',
+    bank_name: '',
     bank_branch: '',
     routing_number: ''
   });
@@ -2606,13 +3151,13 @@ const PayoutAccounts = () => {
     fetchAccounts();
   }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const res = await fetch("/api/merchant/payout-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newAccount, merchantId })
+        body: JSON.stringify({ merchantId, ...newAccount })
       });
       if (res.ok) {
         toast.success("Payout account added");
@@ -2637,54 +3182,32 @@ const PayoutAccounts = () => {
     }
   };
 
+  if (loading) return <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin text-bkash" /></div>;
+
   return (
-    <div className="space-y-6">
+    <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-6 space-y-6 backdrop-blur-sm">
       <div className="flex justify-between items-center">
-        <h4 className="font-bold text-lg">Payout Accounts</h4>
-        <button 
-          onClick={() => setShowAdd(true)}
-          className="bg-bkash hover:bg-bkash/90 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all"
-        >
-          <Plus size={16} /> Add Account
+        <h3 className="font-bold text-lg">Payout Accounts</h3>
+        <button onClick={() => setShowAdd(true)} className="p-2 bg-bkash/10 text-bkash rounded-xl hover:bg-bkash hover:text-white transition-all">
+          <Plus size={20} />
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-3">
         {accounts.map(acc => (
-          <div key={acc.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative group">
-            <button 
-              onClick={() => handleDelete(acc.id)}
-              className="absolute top-4 right-4 text-zinc-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-            >
-              <Trash size={16} />
+          <div key={acc.id} className="p-4 bg-black border border-zinc-800 rounded-2xl flex justify-between items-center group">
+            <div>
+              <div className="text-sm font-bold">{acc.provider} ({acc.type})</div>
+              <div className="text-xs text-zinc-500 font-mono">{acc.account_number}</div>
+            </div>
+            <button onClick={() => handleDelete(acc.id)} className="p-2 text-zinc-500 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+              <Trash2 size={16} />
             </button>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-bkash/10 rounded-xl flex items-center justify-center">
-                {acc.type === 'MFS' ? <Wallet className="text-bkash" size={24} /> : <Building2 className="text-bkash" size={24} />}
-              </div>
-              <div>
-                <div className="font-bold text-sm">{acc.provider}</div>
-                <div className="text-[10px] text-zinc-500 uppercase tracking-widest">{acc.type} Account</div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Number:</span>
-                <span className="font-mono">{acc.account_number}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Name:</span>
-                <span>{acc.account_name}</span>
-              </div>
-              {acc.bank_branch && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-zinc-500">Branch:</span>
-                  <span>{acc.bank_branch}</span>
-                </div>
-              )}
-            </div>
           </div>
         ))}
+        {accounts.length === 0 && (
+          <div className="text-center py-6 text-zinc-500 text-sm">No payout accounts added.</div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -2692,73 +3215,52 @@ const PayoutAccounts = () => {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
               <h3 className="text-xl font-black mb-6">Add Payout Account</h3>
-              <form onSubmit={handleAdd} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Type</label>
-                    <select 
-                      value={newAccount.type}
-                      onChange={(e) => setNewAccount({...newAccount, type: e.target.value})}
-                      className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                    >
-                      <option value="MFS">MFS (Mobile)</option>
-                      <option value="BANK">Bank Account</option>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Provider</label>
+                    <select value={newAccount.provider} onChange={e => setNewAccount({...newAccount, provider: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash">
+                      <option value="bKash">bKash</option>
+                      <option value="Nagad">Nagad</option>
+                      <option value="Rocket">Rocket</option>
+                      <option value="Bank">Bank Transfer</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Provider</label>
-                    <input 
-                      type="text" 
-                      value={newAccount.provider}
-                      onChange={(e) => setNewAccount({...newAccount, provider: e.target.value})}
-                      placeholder="e.g. bKash, Dutch Bangla"
-                      className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                      required
-                    />
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Type</label>
+                    <select value={newAccount.type} onChange={e => setNewAccount({...newAccount, type: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash">
+                      <option value="PERSONAL">Personal</option>
+                      <option value="AGENT">Agent</option>
+                      <option value="MERCHANT">Merchant</option>
+                      <option value="BANK">Bank Account</option>
+                    </select>
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Number</label>
-                  <input 
-                    type="text" 
-                    value={newAccount.account_number}
-                    onChange={(e) => setNewAccount({...newAccount, account_number: e.target.value})}
-                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                    required
-                  />
+                  <input type="text" value={newAccount.account_number} onChange={e => setNewAccount({...newAccount, account_number: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Name</label>
-                  <input 
-                    type="text" 
-                    value={newAccount.account_name}
-                    onChange={(e) => setNewAccount({...newAccount, account_name: e.target.value})}
-                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                    required
-                  />
-                </div>
+
                 {newAccount.type === 'BANK' && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Branch</label>
-                      <input 
-                        type="text" 
-                        value={newAccount.bank_branch}
-                        onChange={(e) => setNewAccount({...newAccount, bank_branch: e.target.value})}
-                        className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                      />
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Name</label>
+                      <input type="text" value={newAccount.account_name} onChange={e => setNewAccount({...newAccount, account_name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Routing No</label>
-                      <input 
-                        type="text" 
-                        value={newAccount.routing_number}
-                        onChange={(e) => setNewAccount({...newAccount, routing_number: e.target.value})}
-                        className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Bank Name</label>
+                        <input type="text" value={newAccount.bank_name} onChange={e => setNewAccount({...newAccount, bank_name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Routing No</label>
+                        <input type="text" value={newAccount.routing_number} onChange={e => setNewAccount({...newAccount, routing_number: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
+                      </div>
                     </div>
                   </div>
                 )}
+
                 <div className="flex gap-3 pt-4">
                   <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
                   <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Add Account</button>
@@ -4487,13 +4989,31 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [permissions, setPermissions] = useState<string[]>(user.permissions || []);
   const userRole = localStorage.getItem("userRole");
-  const hasPermission = (perm: string) => userRole === 'admin' || permissions.includes(perm);
+  
+  const hasPermission = (perm: string) => {
+    // Super Admin has all permissions
+    if (userRole === 'admin') return true;
+    
+    // Merchant restrictions
+    if (userRole === 'merchant') {
+      const kycStatus = user.merchant?.kyc_status || 'PENDING';
+      
+      // Before KYC verification, only allow dashboard, profile, and kyc
+      if (kycStatus !== 'VERIFIED') {
+        return ['dashboard', 'profile', 'kyc'].includes(perm);
+      }
+      return permissions.includes(perm);
+    }
+    
+    return false;
+  };
 
   useEffect(() => {
     const syncProfile = async () => {
-      if (localStorage.getItem("isAdmin") === "true") {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (localStorage.getItem("isAdmin") === "true" && user.id) {
         try {
-          const res = await fetch("/api/user/profile");
+          const res = await fetch(`/api/user/profile?userId=${user.id}`);
           const data = await res.json();
           if (res.ok) {
             localStorage.setItem("user", JSON.stringify(data));
@@ -4578,37 +5098,37 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white font-sans selection:bg-bkash/30">
+    <div className="min-h-screen bg-surface-50 dark:bg-black text-surface-900 dark:text-surface-50 font-sans selection:bg-bkash/30">
       <SyncManager />
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-bkash-dark flex items-center justify-between px-4 z-[60]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-bkash rounded-lg flex items-center justify-center">
-            <CreditCard className="text-white" size={18} />
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-900 flex items-center justify-between px-6 z-[60]">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-bkash rounded-xl flex items-center justify-center shadow-lg shadow-bkash/20">
+            <CreditCard className="text-white" size={20} />
           </div>
-          <h1 className="font-bold text-base">bKash Pay</h1>
+          <h1 className="font-black text-lg tracking-tighter">bKash Pay</h1>
         </div>
         <button 
           onClick={toggleMobileMenu}
-          className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
+          className="p-2 text-surface-400 hover:text-bkash transition-colors"
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 
       <aside className={cn(
-        "fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-bkash-dark p-6 flex flex-col gap-8 z-50 transition-transform duration-300 lg:translate-x-0",
-        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        "fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-surface-950 border-r border-surface-200 dark:border-surface-900 p-6 flex flex-col gap-8 z-50 transition-transform duration-500 ease-in-out lg:translate-x-0",
+        isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
       )}>
         <div className="hidden lg:flex items-center gap-3 px-2">
-          <div className="w-10 h-10 bg-bkash rounded-xl flex items-center justify-center shadow-lg shadow-bkash/20">
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-6 h-6 object-contain" />
+          <div className="w-11 h-11 bg-bkash rounded-2xl flex items-center justify-center shadow-xl shadow-bkash/30 rotate-3 hover:rotate-0 transition-transform duration-300">
+            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-7 h-7 object-contain" />
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">bKash Pay</h1>
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Enterprise</p>
+            <h1 className="font-black text-xl leading-none tracking-tighter">bKash Pay</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest">Enterprise</p>
               <span className={cn(
-                "w-1.5 h-1.5 rounded-full",
+                "w-1.5 h-1.5 rounded-full animate-pulse",
                 isOnline ? "bg-emerald-500" : "bg-amber-500"
               )} />
             </div>
@@ -4617,8 +5137,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
         <div className="lg:hidden h-10" />
 
-        <nav className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar pr-2">
+        <nav className="flex flex-col gap-1.5 flex-1 overflow-y-auto custom-scrollbar pr-2">
           {hasPermission('dashboard') && <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />}
+          {hasPermission('kyc') && <SidebarItem icon={ShieldCheck} label="KYC Verification" active={pathname === '/admin/kyc'} onClick={() => handleNavClick('/admin/kyc')} />}
+          {hasPermission('merchants') && <SidebarItem icon={Users} label="Merchants" active={pathname === '/admin/merchants'} onClick={() => handleNavClick('/admin/merchants')} />}
           {hasPermission('transactions') && <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />}
           {hasPermission('search') && <SidebarItem icon={Search} label="Search Details" active={pathname === '/admin/search'} onClick={() => handleNavClick('/admin/search')} />}
           {hasPermission('refunds') && <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />}
@@ -4631,11 +5153,25 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           {hasPermission('security') && <SidebarItem icon={ShieldCheck} label="Security" active={pathname === '/admin/security'} onClick={() => handleNavClick('/admin/security')} />}
           {hasPermission('user-management') && <SidebarItem icon={UserPlus} label="Users" active={pathname === '/admin/users'} onClick={() => handleNavClick('/admin/users')} />}
           {hasPermission('api-docs') && <SidebarItem icon={BookOpen} label="API Documentation" active={pathname === '/admin/api-docs'} onClick={() => handleNavClick('/admin/api-docs')} />}
-          {hasPermission('withdrawals') && <SidebarItem icon={Wallet} label="Withdrawals" active={pathname === '/admin/withdrawals'} onClick={() => handleNavClick('/admin/withdrawals')} />}
-          {hasPermission('subscriptions') && <SidebarItem icon={Zap} label="Subscriptions" active={pathname === '/admin/subscriptions'} onClick={() => handleNavClick('/admin/subscriptions')} />}
+          {hasPermission('withdrawals') && (
+            <SidebarItem 
+              icon={Wallet} 
+              label={userRole === 'admin' ? "Withdrawal Requests" : "Withdrawals"} 
+              active={pathname === '/admin/withdrawals'} 
+              onClick={() => handleNavClick('/admin/withdrawals')} 
+            />
+          )}
+          {hasPermission('subscriptions') && (
+            <SidebarItem 
+              icon={Zap} 
+              label={userRole === 'admin' ? "Subscription Plans" : "Subscriptions"} 
+              active={pathname === '/admin/subscriptions'} 
+              onClick={() => handleNavClick('/admin/subscriptions')} 
+            />
+          )}
           <SidebarItem icon={Share2} label="Payment Links" active={pathname === '/generate'} onClick={() => handleNavClick('/generate')} />
         </nav>
-        <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
+        <div className="pt-6 border-t border-surface-200 dark:border-surface-900 flex flex-col gap-1.5">
           <SidebarItem icon={Settings} label="Settings" active={pathname === '/admin/settings'} onClick={() => handleNavClick('/admin/settings')} />
           <SidebarItem icon={LogOut} label="Logout" onClick={handleLogout} />
         </div>
@@ -4643,16 +5179,18 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
           onClick={closeMobileMenu}
         />
       )}
 
-      <main className="lg:ml-64 p-3 md:p-8 pt-20 lg:pt-8 min-h-screen flex flex-col">
-        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
+      <main className="lg:ml-72 p-4 md:p-10 pt-24 lg:pt-10 min-h-screen flex flex-col">
+        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
           <div className="w-full lg:w-auto">
-            <h2 className="text-xl md:text-3xl font-bold tracking-tight truncate flex items-center gap-2">
+            <h2 className="text-2xl md:text-4xl font-black tracking-tighter truncate flex items-center gap-3">
               {pathname === '/admin' && "System Overview"}
+              {pathname === '/admin/kyc' && "KYC Verification"}
+              {pathname === '/admin/merchants' && "Merchant Management"}
               {pathname === '/admin/refunds' && "Refund Management"}
               {pathname === '/admin/search' && "Transaction Search"}
               {pathname === '/admin/transactions' && "Payment History"}
@@ -4666,33 +5204,53 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin/security' && "Security Center"}
               {pathname === '/admin/users' && "User Management"}
               {pathname === '/admin/api-docs' && "API Documentation"}
-              {pathname === '/admin/withdrawals' && "Withdrawal Management"}
-              {pathname === '/admin/subscriptions' && "Subscription Plans"}
-              {localStorage.getItem("userRole") === 'merchant' && (
-                <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">Merchant</span>
+              {pathname === '/admin/withdrawals' && (userRole === 'admin' ? "Withdrawal Requests" : "Withdrawal Management")}
+              {pathname === '/admin/subscriptions' && (userRole === 'admin' ? "Subscription Plans" : "Subscription Management")}
+              {userRole === 'merchant' && (
+                <span className="text-[10px] bg-bkash/10 text-bkash px-2.5 py-1 rounded-full font-black uppercase tracking-widest border border-bkash/20">Merchant</span>
               )}
             </h2>
-            <p className="text-zinc-500 text-xs md:text-sm mt-1">
-              Welcome back, {localStorage.getItem("userName") || "Administrator"}
-              {localStorage.getItem("userRole") === 'merchant' && localStorage.getItem("user") && (
-                <span className="ml-2 text-zinc-400">({JSON.parse(localStorage.getItem("user") || "{}").merchant?.name})</span>
+            <p className="text-surface-500 text-sm md:text-base mt-1 font-medium">
+              Welcome back, <span className="text-surface-900 dark:text-white font-bold">{localStorage.getItem("userName") || "Administrator"}</span>
+              {userRole === 'merchant' && user.merchant && (
+                <span className="ml-2 text-surface-400">({user.merchant.name})</span>
               )}
             </p>
           </div>
-          <div className="flex items-center gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 lg:flex-none">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
-              <input type="text" placeholder="Search..." className="w-full lg:w-64 bg-bkash-dark/50 border border-bkash-dark rounded-xl py-2 pl-9 pr-4 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all" />
+          <div className="flex items-center gap-4 w-full lg:w-auto">
+            <div className="relative flex-1 lg:flex-none group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
+              <input type="text" placeholder="Search anything..." className="w-full lg:w-72 bg-surface-100 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all" />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               <NotificationBar />
-              <Link to="/admin/profile" className="h-9 w-9 md:h-10 md:w-10 rounded-xl bg-zinc-800 overflow-hidden border border-zinc-700 shrink-0 hover:border-bkash transition-colors">
+              <Link to="/admin/profile" className="h-11 w-11 md:h-12 md:w-12 rounded-2xl bg-surface-100 dark:bg-surface-900 overflow-hidden border border-surface-200 dark:border-surface-800 shrink-0 hover:border-bkash transition-all duration-300 hover:scale-105 active:scale-95 shadow-sm">
                 <img src={localStorage.getItem("userAvatar") || "https://picsum.photos/seed/admin/100/100"} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </Link>
             </div>
           </div>
         </header>
         <div className="flex-1">
+          {userRole === 'merchant' && user.merchant?.kyc_status !== 'VERIFIED' && pathname !== '/admin/kyc' && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8 p-6 bg-amber-500/10 border border-amber-500/20 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg shadow-amber-500/5"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center">
+                  <AlertTriangle className="text-amber-500" size={24} />
+                </div>
+                <div>
+                  <p className="text-lg font-black text-amber-600 dark:text-amber-400">KYC Verification Required</p>
+                  <p className="text-sm text-amber-600/70 dark:text-amber-400/60 font-medium">Please complete your KYC verification to unlock all features.</p>
+                </div>
+              </div>
+              <Link to="/admin/kyc" className="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-black text-sm font-black px-8 py-3.5 rounded-2xl transition-all shadow-lg shadow-amber-500/20 active:scale-95">
+                Verify Now
+              </Link>
+            </motion.div>
+          )}
           {children}
         </div>
       </main>
@@ -4703,6 +5261,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </div>
     </div>
   );
+};
+
+const WithdrawalsRoute = () => {
+  const userRole = localStorage.getItem("userRole");
+  return userRole === 'admin' ? <AdminWithdrawals /> : <Withdrawals />;
+};
+
+const SubscriptionsRoute = () => {
+  const userRole = localStorage.getItem("userRole");
+  return userRole === 'admin' ? <AdminPlans /> : <Subscriptions />;
 };
 
 export default function App() {
@@ -4728,9 +5296,11 @@ export default function App() {
             <Route path="/admin/statements" element={<Statements />} />
             <Route path="/admin/security" element={<Security />} />
             <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/admin/merchants" element={<MerchantManagement />} />
+            <Route path="/admin/kyc" element={<KYCVerification />} />
             <Route path="/admin/api-docs" element={<ApiDocs />} />
-            <Route path="/admin/withdrawals" element={localStorage.getItem("userRole") === 'admin' ? <AdminWithdrawals /> : <Withdrawals />} />
-            <Route path="/admin/subscriptions" element={localStorage.getItem("userRole") === 'admin' ? <AdminPlans /> : <Subscriptions />} />
+            <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
+            <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
             <Route path="/generate" element={<PaymentLinkGenerator />} />
             <Route path="/payment-success" element={<SuccessPage />} />
             <Route path="/payment-failed" element={<FailurePage />} />

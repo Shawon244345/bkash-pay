@@ -1,28 +1,51 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-bkash: #e2136e;
+  --color-bkash-dark: #b10f56;
+  --color-bkash-light: #fce7f1;
+  
+  --color-surface-50: #fafafa;
+  --color-surface-100: #f4f4f5;
+  --color-surface-200: #e4e4e7;
+  --color-surface-300: #d4d4d8;
+  --color-surface-400: #a1a1aa;
+  --color-surface-500: #71717a;
+  --color-surface-600: #52525b;
+  --color-surface-700: #3f3f46;
+  --color-surface-800: #27272a;
+  --color-surface-900: #18181b;
+  --color-surface-950: #09090b;
+}
 
 @layer base {
   :root {
     --bg: #ffffff;
-    --text: #000000;
-    --card-bg: #f4f4f5;
+    --text: #09090b;
+    --card-bg: #fafafa;
     --border: #e4e4e7;
+    --sidebar-bg: #ffffff;
+    --accent: #e2136e;
   }
 
   .dark {
     --bg: #000000;
-    --text: #ffffff;
+    --text: #fafafa;
     --card-bg: #09090b;
-    --border: #27272a;
+    --border: #18181b;
+    --sidebar-bg: #09090b;
+    --accent: #e2136e;
   }
 
   body {
     @apply antialiased transition-colors duration-300;
     background-color: var(--bg);
     color: var(--text);
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
 }
 
@@ -36,9 +59,25 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-300 dark:bg-zinc-800 rounded-full hover:bg-zinc-400 dark:hover:bg-zinc-700 transition-colors;
+  @apply bg-surface-200 dark:bg-surface-800 rounded-full hover:bg-surface-300 dark:hover:bg-surface-700 transition-colors;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
+}
+
+.glass {
+  @apply bg-white/70 dark:bg-black/70 backdrop-blur-md border border-white/20 dark:border-white/10;
+}
+
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-xl hover:shadow-bkash/5 hover:-translate-y-1;
+}
+
+.btn-primary {
+  @apply bg-bkash hover:bg-bkash-dark text-white font-bold px-6 py-3 rounded-2xl transition-all active:scale-95 shadow-lg shadow-bkash/20;
+}
+
+.input-field {
+  @apply w-full bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all;
 }

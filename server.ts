@@ -118,7 +118,10 @@ const initDb = async () => {
       bkash_password TEXT,
       api_key TEXT UNIQUE,
       balance REAL DEFAULT 0,
-      status TEXT DEFAULT 'ACTIVE',
+      status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'INACTIVE'
+      kyc_status TEXT DEFAULT 'PENDING', -- 'PENDING', 'SUBMITTED', 'VERIFIED', 'REJECTED'
+      kyc_details TEXT, -- JSON: { nid, passport, trade_license, contact_number }
+      permissions TEXT, -- JSON array of allowed tabs
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -199,10 +202,11 @@ const initDb = async () => {
   try { await db.run("ALTER TABLE refunds ADD COLUMN merchant_id TEXT"); } catch (e) {}
   try { await db.run("ALTER TABLE merchants ADD COLUMN balance REAL DEFAULT 0"); } catch (e) {}
 
-  // Migration for refunds table to ensure all columns exist
-  try { await db.run("ALTER TABLE refunds ADD COLUMN refund_execution_time DATETIME"); } catch (e) {}
-  try { await db.run("ALTER TABLE refunds ADD COLUMN ip_address TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE refunds ADD COLUMN initiated_by TEXT"); } catch (e) {}
+  // Migration for merchants table
+  try { await db.run("ALTER TABLE merchants ADD COLUMN kyc_status TEXT DEFAULT 'PENDING'"); } catch (e) {}
+  try { await db.run("ALTER TABLE merchants ADD COLUMN kyc_details TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE merchants ADD COLUMN permissions TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE merchants ADD COLUMN status TEXT DEFAULT 'ACTIVE'"); } catch (e) {}
 
   // Seed default credentials if not present
   const seedSettings = [
@@ -469,6 +473,35 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
+app.get("/api/user/profile", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: "User ID required" });
+  
+  try {
+    const user = await db.get("SELECT * FROM users WHERE id = ?", userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    
+    let merchant = null;
+    if (user.merchant_id) {
+      merchant = await db.get("SELECT * FROM merchants WHERE id = ?", user.merchant_id);
+    }
+    
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+      merchant_id: user.merchant_id,
+      merchant: merchant,
+      permissions: user.permissions.split(",")
+    });
+  } catch (error) {
+    console.error("Profile fetch error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.post("/api/merchant/register", async (req, res) => {
   const { name, email, password } = req.body;
   
@@ -728,7 +761,7 @@ app.get("/api/bkash/subscription-callback", async (req, res) => {
         );
         
         await auditLog("SUBSCRIPTION_SUCCESS", merchantId, `Merchant subscribed to plan ${planId}`);
-        return res.redirect(`/merchant/subscription?status=success&plan=${planId}`);
+        return res.redirect(`/admin/subscriptions?status=success&plan=${planId}`);
       }
     } catch (error) {
       console.error("Subscription Execution Error:", error);
@@ -736,7 +769,7 @@ app.get("/api/bkash/subscription-callback", async (req, res) => {
   }
   
   await db.run("UPDATE subscriptions SET status = 'FAILED' WHERE payment_id = ?", paymentID);
-  res.redirect("/merchant/subscription?status=failed");
+  res.redirect("/admin/subscriptions?status=failed");
 });
 
 app.get("/api/admin/merchant-subscriptions", async (req, res) => {
@@ -787,6 +820,72 @@ app.post("/api/admin/update-credentials", async (req, res) => {
   }
 });
 
+// --- Merchant Management API ---
+
+app.get("/api/admin/merchants", async (req, res) => {
+  try {
+    const merchants = await db.all("SELECT * FROM merchants ORDER BY created_at DESC");
+    res.json(merchants);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch merchants" });
+  }
+});
+
+app.post("/api/admin/merchants/status", async (req, res) => {
+  const { id, status } = req.body;
+  try {
+    await db.run("UPDATE merchants SET status = ? WHERE id = ?", status, id);
+    await auditLog("MERCHANT_STATUS_UPDATE", "admin", { id, status });
+    res.json({ message: "Merchant status updated" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update merchant status" });
+  }
+});
+
+app.post("/api/admin/merchants/permissions", async (req, res) => {
+  const { id, permissions } = req.body;
+  try {
+    await db.run("UPDATE merchants SET permissions = ? WHERE id = ?", JSON.stringify(permissions), id);
+    // Also update the user permissions for the merchant
+    await db.run("UPDATE users SET permissions = ? WHERE merchant_id = ?", permissions.join(','), id);
+    await auditLog("MERCHANT_PERMISSIONS_UPDATE", "admin", { id, permissions });
+    res.json({ message: "Merchant permissions updated" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update merchant permissions" });
+  }
+});
+
+app.post("/api/admin/merchants/kyc-verify", async (req, res) => {
+  const { id, status } = req.body;
+  try {
+    await db.run("UPDATE merchants SET kyc_status = ? WHERE id = ?", status, id);
+    await auditLog("MERCHANT_KYC_VERIFY", "admin", { id, status });
+    res.json({ message: "Merchant KYC status updated" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update KYC status" });
+  }
+});
+
+app.get("/api/merchant/kyc", async (req, res) => {
+  const { merchantId } = req.query;
+  try {
+    const merchant = await db.get("SELECT kyc_status, kyc_details FROM merchants WHERE id = ?", merchantId);
+    res.json(merchant);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch KYC status" });
+  }
+});
+
+app.post("/api/merchant/kyc", async (req, res) => {
+  const { merchantId, details } = req.body;
+  try {
+    await db.run("UPDATE merchants SET kyc_status = 'SUBMITTED', kyc_details = ? WHERE id = ?", JSON.stringify(details), merchantId);
+    await auditLog("MERCHANT_KYC_SUBMIT", merchantId as string, details);
+    res.json({ message: "KYC submitted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to submit KYC" });
+  }
+});
 app.get("/api/admin/stats", async (req, res) => {
   const { merchantId } = req.query;
   try {
@@ -896,14 +995,27 @@ app.post("/api/admin/settings", async (req, res) => {
 
 app.post("/api/bkash/refund", async (req, res) => {
   try {
-    const { paymentID, trxID, amount, sku, reason } = req.body;
+    const { paymentID, trxID, amount, sku, reason, userRole, merchantId: requesterMerchantId } = req.body;
     const ip = req.ip || req.headers['x-forwarded-for'] || "";
-    const initiated_by = "admin"; // In a real app, this would come from session
+    const initiated_by = userRole || "admin";
     
-    // Check transaction mode
-    const transaction = await db.get("SELECT payment_mode FROM transactions WHERE trx_id = ?", trxID);
-    if (transaction && transaction.payment_mode === 'GLOBAL') {
-      return res.status(403).json({ error: "Super Admin cannot process refunds for transactions processed via Global API. These must be managed according to platform policy." });
+    // Check transaction ownership and mode
+    const transaction = await db.get("SELECT merchant_id, payment_mode FROM transactions WHERE trx_id = ?", trxID);
+    
+    if (!transaction) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Strict rule: Super Admin cannot refund ANY transaction belonging to a merchant
+    if (userRole === 'admin' && transaction.merchant_id) {
+      return res.status(403).json({ 
+        error: "Super Admin is restricted from refunding merchant transactions. Merchants must handle their own refunds." 
+      });
+    }
+
+    // If it's a merchant trying to refund, ensure they own the transaction
+    if (userRole === 'merchant' && transaction.merchant_id !== requesterMerchantId) {
+      return res.status(403).json({ error: "Unauthorized: You can only refund your own transactions." });
     }
 
     // Check if already refunded
