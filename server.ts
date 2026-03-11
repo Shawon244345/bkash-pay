@@ -260,6 +260,8 @@ const initDb = async () => {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+
 // Multer Setup for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -282,6 +284,14 @@ const upload = multer({
 
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Static fallback for production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.resolve(__dirname, "dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.resolve(__dirname, "dist", "index.html"));
+  });
+}
 
 // Installer API
 app.get("/api/install/status", (req, res) => {
@@ -400,11 +410,8 @@ const getBkashHeaders = async (merchantId?: string) => {
 };
 
 // API Routes
-app.use((req, res, next) => {
-  if (req.url.endsWith('.js') || req.url.endsWith('.ts') || req.url.endsWith('.tsx')) {
-    res.type('application/javascript');
-  }
-  next();
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", mode: process.env.NODE_ENV || 'development' });
 });
 
 app.post("/api/bkash/create-payment", async (req, res) => {
@@ -1365,17 +1372,17 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 async function startServer() {
   await initDb();
 
+  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      root: __dirname,
+      server: { 
+        middlewareMode: true,
+        hmr: false
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.resolve(__dirname, "dist", "index.html"));
-    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
