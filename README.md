@@ -12,27 +12,24 @@ A full-featured, secure, and offline-ready bKash Payment Gateway system designed
 
 ## Installation (cPanel)
 
-1. **Upload Files**: Upload all project files to your cPanel directory (e.g., `public_html/bkash-pay`).
+1. **Upload Files**: Upload the project ZIP file to your cPanel directory (e.g., `public_html/bkash-pay`) and extract it.
 2. **Setup Node.js App**:
    - Go to **Setup Node.js App** in cPanel.
    - Click **Create Application**.
-   - **Node.js version**: Select `18.x`.
+   - **Node.js version**: Select `18.x` or higher.
    - **Application mode**: `production`.
    - **Application root**: Path to your files (e.g., `bkash-pay`).
-   - **Application URL**: `bkash.egoluck.com`
+   - **Application URL**: Your domain (e.g., `payments.yourdomain.com`)
    - **Application startup file**: `server.js`.
 3. **Install Dependencies**:
    - Click **Run npm install** in the cPanel Node.js app interface.
-4. **Environment Variables**:
-   - Add these variables in the cPanel interface:
-     - `PORT`: `3000`
-     - `APP_URL`: `https://bkash.egoluck.com`
-     - `BKASH_APP_KEY`: Your bKash App Key
-     - `BKASH_APP_SECRET`: Your bKash App Secret
-     - `BKASH_USERNAME`: Your bKash Username
-     - `BKASH_PASSWORD`: Your bKash Password
-     - `BKASH_BASE_URL`: `https://tokenized.pay.bka.sh/v1.2.0-beta` (Sandbox) or Production URL.
-5. **Restart**: Click **Restart** on the Node.js app.
+4. **Run the App**:
+   - Click **Restart** on the Node.js app.
+5. **Web Setup Wizard**:
+   - Visit your Application URL in your browser.
+   - You will be automatically redirected to the **Setup Wizard**.
+   - Follow the steps to configure your bKash API credentials and Admin account.
+   - Once finished, the app will be ready to use!
 
 ## Default Credentials
 - **Admin Username**: `admin`

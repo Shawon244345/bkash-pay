@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, createContext, useContext } from "react";
-import { BrowserRouter, Routes, Route, useNavigate, useSearchParams, Link, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useSearchParams, Link, useLocation, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LayoutDashboard, 
@@ -92,6 +92,7 @@ import "jspdf-autotable";
 import { cn, formatCurrency } from "./lib/utils";
 import { Toaster, toast } from "sonner";
 import { saveTransactions, getLocalTransactions, queueAction, getSyncQueue, removeSyncAction } from "./db";
+import Installer from "./components/Installer";
 
 // --- Theme Management ---
 const ThemeContext = React.createContext({
@@ -5274,38 +5275,71 @@ const SubscriptionsRoute = () => {
 };
 
 export default function App() {
+  const [isInstalled, setIsInstalled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkInstallation = async () => {
+      try {
+        const response = await fetch("/api/install/status");
+        const data = await response.json();
+        setIsInstalled(data.installed);
+      } catch (error) {
+        console.error("Failed to check installation status", error);
+        setIsInstalled(true);
+      }
+    };
+    checkInstallation();
+  }, []);
+
+  if (isInstalled === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-surface-50 dark:bg-surface-950">
+        <Loader2 className="animate-spin text-bkash" size={48} />
+      </div>
+    );
+  }
+
   return (
     <ThemeProvider>
       <BrowserRouter>
         <Toaster position="top-right" richColors theme="dark" />
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Checkout />} />
-            <Route path="/merchant/register" element={<MerchantRegister />} />
-            <Route path="/admin" element={<Dashboard />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/refunds" element={<Refunds />} />
-            <Route path="/admin/search" element={<SearchTransaction />} />
-            <Route path="/admin/transactions" element={<Transactions />} />
-            <Route path="/admin/settings" element={<SettingsPage />} />
-            <Route path="/admin/profile" element={<UserProfile />} />
-            <Route path="/admin/logs" element={<LogsPage />} />
-            <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
-            <Route path="/admin/analytics" element={<Analytics />} />
-            <Route path="/admin/customers" element={<Customers />} />
-            <Route path="/admin/statements" element={<Statements />} />
-            <Route path="/admin/security" element={<Security />} />
-            <Route path="/admin/users" element={<UserManagement />} />
-            <Route path="/admin/merchants" element={<MerchantManagement />} />
-            <Route path="/admin/kyc" element={<KYCVerification />} />
-            <Route path="/admin/api-docs" element={<ApiDocs />} />
-            <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
-            <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
-            <Route path="/generate" element={<PaymentLinkGenerator />} />
-            <Route path="/payment-success" element={<SuccessPage />} />
-            <Route path="/payment-failed" element={<FailurePage />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          <Route path="/install" element={<Installer />} />
+          <Route path="/*" element={
+            isInstalled === false ? (
+              <Navigate to="/install" />
+            ) : (
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Checkout />} />
+                  <Route path="/merchant/register" element={<MerchantRegister />} />
+                  <Route path="/admin" element={<Dashboard />} />
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route path="/admin/refunds" element={<Refunds />} />
+                  <Route path="/admin/search" element={<SearchTransaction />} />
+                  <Route path="/admin/transactions" element={<Transactions />} />
+                  <Route path="/admin/settings" element={<SettingsPage />} />
+                  <Route path="/admin/profile" element={<UserProfile />} />
+                  <Route path="/admin/logs" element={<LogsPage />} />
+                  <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
+                  <Route path="/admin/analytics" element={<Analytics />} />
+                  <Route path="/admin/customers" element={<Customers />} />
+                  <Route path="/admin/statements" element={<Statements />} />
+                  <Route path="/admin/security" element={<Security />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/merchants" element={<MerchantManagement />} />
+                  <Route path="/admin/kyc" element={<KYCVerification />} />
+                  <Route path="/admin/api-docs" element={<ApiDocs />} />
+                  <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
+                  <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
+                  <Route path="/generate" element={<PaymentLinkGenerator />} />
+                  <Route path="/payment-success" element={<SuccessPage />} />
+                  <Route path="/payment-failed" element={<FailurePage />} />
+                </Routes>
+              </Layout>
+            )
+          } />
+        </Routes>
       </BrowserRouter>
     </ThemeProvider>
   );
