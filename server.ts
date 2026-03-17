@@ -15,6 +15,12 @@ import rateLimit from "express-rate-limit";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
+const APP_VERSION = "1.2.0";
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1630,6 +1636,64 @@ app.delete("/api/admin/users/:id", authenticateToken, authorizeRole(['admin']), 
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+app.get("/api/admin/system/version", authenticateToken, (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
+app.get("/api/admin/system/check-update", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  try {
+    // Check if git is available and it's a git repo
+    const { stdout: status } = await execAsync("git status");
+    if (!status) throw new Error("Not a git repository");
+
+    await execAsync("git fetch origin");
+    const { stdout: local } = await execAsync("git rev-parse HEAD");
+    const { stdout: remote } = await execAsync("git rev-parse @{u}");
+
+    if (local.trim() === remote.trim()) {
+      return res.json({ updateAvailable: false, currentVersion: APP_VERSION });
+    }
+
+    const { stdout: log } = await execAsync("git log HEAD..@{u} --oneline");
+    res.json({ 
+      updateAvailable: true, 
+      currentVersion: APP_VERSION,
+      latestCommit: remote.trim().slice(0, 7),
+      changes: log.trim().split('\n')
+    });
+  } catch (error: any) {
+    console.error("Update Check Error:", error);
+    res.status(500).json({ error: "Could not check for updates. Ensure Git is configured correctly." });
+  }
+});
+
+app.post("/api/admin/system/update", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  try {
+    await auditLog("SYSTEM_UPDATE_STARTED", (req as any).user.username, {});
+    
+    // 1. Pull latest changes
+    await execAsync("git pull origin main || git pull origin master");
+    
+    // 2. Install dependencies
+    await execAsync("npm install --no-audit --no-fund --prefer-offline");
+    
+    // 3. Build application
+    await execAsync("npm run build");
+
+    await auditLog("SYSTEM_UPDATE_COMPLETED", (req as any).user.username, {});
+    
+    res.json({ success: true, message: "Update completed. System will restart shortly." });
+
+    // Graceful restart (process manager like PM2 or our bootstrapper will handle this)
+    setTimeout(() => {
+      process.exit(0);
+    }, 2000);
+  } catch (error: any) {
+    console.error("System Update Error:", error);
+    res.status(500).json({ error: "Update failed: " + error.message });
   }
 });
 

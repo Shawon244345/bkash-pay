@@ -1444,6 +1444,10 @@ const SettingsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [version, setVersion] = useState<string>("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const isOnline = useOnlineStatus();
   const { theme, setTheme } = useTheme();
@@ -1513,7 +1517,56 @@ const SettingsPage = () => {
       }
     };
     fetchData();
+    fetchVersion();
   }, [userRole, merchantId]);
+
+  const fetchVersion = async () => {
+    try {
+      const res = await secureFetch("/api/admin/system/version");
+      const data = await res.json();
+      setVersion(data.version);
+    } catch (e) {}
+  };
+
+  const checkUpdate = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const res = await secureFetch("/api/admin/system/check-update");
+      const data = await res.json();
+      if (res.ok) {
+        setUpdateInfo(data);
+        if (!data.updateAvailable) {
+          toast.success("System is up to date!");
+        }
+      } else {
+        toast.error(data.error || "Failed to check for updates");
+      }
+    } catch (err) {
+      toast.error("Update check failed");
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!window.confirm("Are you sure you want to update the system? This will restart the server.")) return;
+    
+    setIsUpdating(true);
+    try {
+      const res = await secureFetch("/api/admin/system/update", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Update started. Please wait for the system to restart.");
+        setTimeout(() => window.location.reload(), 10000);
+      } else {
+        toast.error(data.error || "Update failed");
+      }
+    } catch (err) {
+      toast.error("Update failed");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1759,6 +1812,71 @@ const SettingsPage = () => {
             </button>
           </div>
         </form>
+
+        {userRole === 'admin' && (
+          <div className="p-8 border-t border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-950/50">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-surface-900 dark:text-white flex items-center gap-2">
+                  <RefreshCcw className={cn("text-bkash", isCheckingUpdate && "animate-spin")} size={18} />
+                  System Update
+                </h4>
+                <p className="text-xs text-surface-500">
+                  Current Version: <span className="font-mono font-bold text-bkash">{version || "Loading..."}</span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {updateInfo?.updateAvailable ? (
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-emerald-600">New Update Available!</p>
+                      <p className="text-[10px] text-surface-400">Commit: {updateInfo.latestCommit}</p>
+                    </div>
+                    <button
+                      onClick={handleUpdate}
+                      disabled={isUpdating}
+                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isUpdating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                      Confirm Update
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={checkUpdate}
+                    disabled={isCheckingUpdate}
+                    className="px-6 py-2.5 bg-surface-900 dark:bg-white dark:text-surface-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-surface-900/10 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isCheckingUpdate ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+                    Check for Updates
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {updateInfo?.updateAvailable && updateInfo.changes && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-6 p-4 bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800"
+              >
+                <h5 className="text-[10px] font-black text-surface-400 uppercase tracking-widest mb-3">Recent Changes</h5>
+                <ul className="space-y-2">
+                  {updateInfo.changes.slice(0, 5).map((change: string, i: number) => (
+                    <li key={i} className="text-xs text-surface-600 dark:text-surface-300 flex items-start gap-2">
+                      <span className="text-bkash mt-1">•</span>
+                      {change}
+                    </li>
+                  ))}
+                  {updateInfo.changes.length > 5 && (
+                    <li className="text-[10px] text-surface-400 italic">...and {updateInfo.changes.length - 5} more changes</li>
+                  )}
+                </ul>
+              </motion.div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
