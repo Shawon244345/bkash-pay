@@ -1706,8 +1706,12 @@ app.post("/api/admin/system/update", authenticateToken, authorizeRole(['admin'])
   try {
     await auditLog("SYSTEM_UPDATE_STARTED", (req as any).user.username, {});
     
-    // 1. Pull latest changes
-    await execAsync("git pull origin main || git pull origin master");
+    // 0. Ensure git is ready
+    await ensureGitRepo();
+    
+    // 1. Fetch and Reset to latest remote commit (force sync)
+    await execAsync("git fetch origin");
+    await execAsync("git reset --hard origin/main || git reset --hard origin/master");
     
     // 2. Install dependencies
     await execAsync("npm install --no-audit --no-fund --prefer-offline");
