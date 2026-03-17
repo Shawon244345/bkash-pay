@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --target=node18 --outfile=server.js --external:sqlite3 --external:vite --format=esm",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "postinstall": "npm run build",
     "start": "NODE_ENV=production node server.js"
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "@types/node": "^22.14.0",
     "@types/sqlite3": "^3.1.11",
     "autoprefixer": "^10.4.21",
+    "esbuild": "^0.27.4",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.8.2",

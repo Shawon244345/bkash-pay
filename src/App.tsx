@@ -94,6 +94,39 @@ import { Toaster, toast } from "sonner";
 import { saveTransactions, getLocalTransactions, queueAction, getSyncQueue, removeSyncAction } from "./db";
 import Installer from "./components/Installer";
 
+// --- Secure Fetch Helper ---
+const secureFetch = async (url: string, options: any = {}) => {
+  const token = localStorage.getItem("token");
+  const headers = {
+    ...options.headers,
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401 || response.status === 403) {
+    // Token expired or invalid
+    localStorage.removeItem("token");
+    localStorage.removeItem("isAdmin");
+    localStorage.removeItem("user");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userRole");
+    localStorage.removeItem("merchant_id");
+    localStorage.removeItem("userAvatar");
+    localStorage.removeItem("userPermissions");
+    window.location.href = "/admin/login";
+    throw new Error("Session expired. Please login again.");
+  }
+
+  return response;
+};
+
 // --- Theme Management ---
 const ThemeContext = React.createContext({
   theme: 'dark',
@@ -353,7 +386,7 @@ const Dashboard = () => {
   useEffect(() => {
     const merchantId = localStorage.getItem("merchant_id");
     const url = merchantId ? `/api/admin/stats?merchantId=${merchantId}` : "/api/admin/stats";
-    fetch(url)
+    secureFetch(url)
       .then(res => {
         if (!res.ok) throw new Error("Failed to fetch stats");
         return res.json();
@@ -514,7 +547,7 @@ const Checkout = () => {
     setIsProcessing(true);
     setShowManualRedirect(false);
     try {
-      const res = await fetch("/api/bkash/create-payment", {
+      const res = await secureFetch("/api/bkash/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -989,13 +1022,13 @@ const SyncManager = () => {
       try {
         let res;
         if (action.type === 'refund') {
-          res = await fetch("/api/bkash/refund", {
+          res = await secureFetch("/api/bkash/refund", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(action.payload)
           });
         } else if (action.type === 'settings') {
-          res = await fetch("/api/admin/settings", {
+          res = await secureFetch("/api/admin/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(action.payload)
@@ -1053,7 +1086,7 @@ const Transactions = () => {
           ...filters,
           ...(merchantId ? { merchantId } : {})
         });
-        const res = await fetch(`/api/admin/transactions?${params.toString()}`);
+        const res = await secureFetch(`/api/admin/transactions?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch transactions");
         const data = await res.json();
         setTransactions(data);
@@ -1308,7 +1341,7 @@ const LogsPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/logs")
+    secureFetch("/api/admin/logs")
       .then(res => res.json())
       .then(setLogs)
       .finally(() => setLoading(false));
@@ -1354,7 +1387,7 @@ const AuditLogsPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/audit-logs")
+    secureFetch("/api/admin/audit-logs")
       .then(res => res.json())
       .then(setLogs)
       .finally(() => setLoading(false));
@@ -1423,7 +1456,7 @@ const SettingsPage = () => {
 
     setIsUploadingLogo(true);
     try {
-      const res = await fetch("/api/admin/settings/upload-logo", {
+      const res = await secureFetch("/api/admin/settings/upload-logo", {
         method: "POST",
         body: formData,
       });
@@ -1444,7 +1477,7 @@ const SettingsPage = () => {
   const testConnection = async () => {
     setIsTesting(true);
     try {
-      const res = await fetch("/api/admin/test-bkash", { method: "POST" });
+      const res = await secureFetch("/api/admin/test-bkash", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         toast.success(data.message);
@@ -1462,11 +1495,11 @@ const SettingsPage = () => {
     const fetchData = async () => {
       try {
         if (userRole === 'admin') {
-          const res = await fetch("/api/admin/settings");
+          const res = await secureFetch("/api/admin/settings");
           const data = await res.json();
           setSettings(data);
         } else if (merchantId) {
-          const res = await fetch(`/api/merchant/settings?merchantId=${merchantId}`);
+          const res = await secureFetch(`/api/merchant/settings?merchantId=${merchantId}`);
           const data = await res.json();
           setMerchantSettings(data);
         }
@@ -1484,14 +1517,14 @@ const SettingsPage = () => {
     setIsSaving(true);
     try {
       if (userRole === 'admin') {
-        const res = await fetch("/api/admin/settings", {
+        const res = await secureFetch("/api/admin/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(settings)
         });
         if (res.ok) toast.success("Settings updated successfully");
       } else if (merchantId) {
-        const res = await fetch("/api/merchant/settings", {
+        const res = await secureFetch("/api/merchant/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...merchantSettings, merchantId })
@@ -1825,7 +1858,7 @@ const Refunds = () => {
 
   const fetchRefunds = async () => {
     try {
-      const res = await fetch("/api/admin/refunds");
+      const res = await secureFetch("/api/admin/refunds");
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to fetch refunds: ${res.status}`);
@@ -1842,7 +1875,7 @@ const Refunds = () => {
     if (!trxId || trxId === "null") return;
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/admin/transaction-search?trx_id=${trxId}`);
+      const res = await secureFetch(`/api/admin/transaction-search?trx_id=${trxId}`);
       const data = await res.json();
       setFoundTx(data);
       if (data) {
@@ -1898,7 +1931,7 @@ const Refunds = () => {
         return;
       }
 
-      const res = await fetch("/api/bkash/refund", {
+      const res = await secureFetch("/api/bkash/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -2323,8 +2356,8 @@ const Subscriptions = () => {
   const fetchData = async () => {
     try {
       const [pRes, sRes] = await Promise.all([
-        fetch("/api/subscription-plans"),
-        fetch(`/api/merchant/subscription?merchantId=${merchantId}`)
+        secureFetch("/api/subscription-plans"),
+        secureFetch(`/api/merchant/subscription?merchantId=${merchantId}`)
       ]);
       const [pData, sData] = await Promise.all([pRes.json(), sRes.json()]);
       setPlans(pData);
@@ -2342,7 +2375,7 @@ const Subscriptions = () => {
 
   const handleSubscribe = async (planId: string) => {
     try {
-      const res = await fetch("/api/merchant/subscribe", {
+      const res = await secureFetch("/api/merchant/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchantId, planId })
@@ -2444,8 +2477,8 @@ const AdminPlans = () => {
   const fetchData = async () => {
     try {
       const [pRes, sRes] = await Promise.all([
-        fetch("/api/subscription-plans"),
-        fetch("/api/admin/merchant-subscriptions")
+        secureFetch("/api/subscription-plans"),
+        secureFetch("/api/admin/merchant-subscriptions")
       ]);
       const [pData, sData] = await Promise.all([pRes.json(), sRes.json()]);
       setPlans(pData);
@@ -2464,7 +2497,7 @@ const AdminPlans = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/admin/subscription-plans", {
+      const res = await secureFetch("/api/admin/subscription-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2669,7 +2702,7 @@ const AdminWithdrawals = () => {
 
   const fetchWithdrawals = async () => {
     try {
-      const res = await fetch("/api/admin/withdrawals");
+      const res = await secureFetch("/api/admin/withdrawals");
       const data = await res.json();
       setWithdrawals(data);
     } catch (err) {
@@ -2686,7 +2719,7 @@ const AdminWithdrawals = () => {
   const handleStatus = async (id: string, status: string) => {
     const note = prompt("Admin Note (Optional):");
     try {
-      const res = await fetch("/api/admin/withdrawals/status", {
+      const res = await secureFetch("/api/admin/withdrawals/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status, admin_note: note })
@@ -2790,7 +2823,7 @@ const MerchantManagement = () => {
 
   const fetchMerchants = async () => {
     try {
-      const res = await fetch("/api/admin/merchants");
+      const res = await secureFetch("/api/admin/merchants");
       const data = await res.json();
       setMerchants(data);
     } catch (err) {
@@ -2806,7 +2839,7 @@ const MerchantManagement = () => {
 
   const handleStatus = async (id: string, status: string) => {
     try {
-      const res = await fetch("/api/admin/merchants/status", {
+      const res = await secureFetch("/api/admin/merchants/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status })
@@ -2822,7 +2855,7 @@ const MerchantManagement = () => {
 
   const handleKycVerify = async (id: string, status: string) => {
     try {
-      const res = await fetch("/api/admin/merchants/kyc-verify", {
+      const res = await secureFetch("/api/admin/merchants/kyc-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status })
@@ -2843,7 +2876,7 @@ const MerchantManagement = () => {
 
   const savePermissions = async () => {
     try {
-      const res = await fetch("/api/admin/merchants/permissions", {
+      const res = await secureFetch("/api/admin/merchants/permissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: editingPermissions.id, permissions: selectedPermissions })
@@ -3020,7 +3053,7 @@ const KYCVerification = () => {
 
   const fetchKyc = async () => {
     try {
-      const res = await fetch(`/api/merchant/kyc?merchantId=${merchantId}`);
+      const res = await secureFetch(`/api/merchant/kyc?merchantId=${merchantId}`);
       const data = await res.json();
       setKyc(data);
       if (data.kyc_details) {
@@ -3040,7 +3073,7 @@ const KYCVerification = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/merchant/kyc", {
+      const res = await secureFetch("/api/merchant/kyc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchantId, details: form })
@@ -3203,7 +3236,7 @@ const PayoutAccounts = () => {
 
   const fetchAccounts = async () => {
     try {
-      const res = await fetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`);
+      const res = await secureFetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`);
       const data = await res.json();
       setAccounts(data);
     } catch (err) {
@@ -3220,7 +3253,7 @@ const PayoutAccounts = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/merchant/payout-accounts", {
+      const res = await secureFetch("/api/merchant/payout-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchantId, ...newAccount })
@@ -3238,7 +3271,7 @@ const PayoutAccounts = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure?")) return;
     try {
-      const res = await fetch(`/api/merchant/payout-accounts/${id}`, { method: "DELETE" });
+      const res = await secureFetch(`/api/merchant/payout-accounts/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Account deleted");
         fetchAccounts();
@@ -3354,9 +3387,9 @@ const Withdrawals = () => {
   const fetchData = async () => {
     try {
       const [wRes, aRes, mRes] = await Promise.all([
-        fetch(`/api/merchant/withdrawals?merchantId=${merchantId}`),
-        fetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`),
-        fetch(`/api/merchant/settings?merchantId=${merchantId}`)
+        secureFetch(`/api/merchant/withdrawals?merchantId=${merchantId}`),
+        secureFetch(`/api/merchant/payout-accounts?merchantId=${merchantId}`),
+        secureFetch(`/api/merchant/settings?merchantId=${merchantId}`)
       ]);
       const [wData, aData, mData] = await Promise.all([wRes.json(), aRes.json(), mRes.json()]);
       setWithdrawals(wData);
@@ -3405,7 +3438,7 @@ const Withdrawals = () => {
     if (!selectedAccount) return toast.error("Please select a payout account");
 
     try {
-      const res = await fetch("/api/merchant/withdrawals", {
+      const res = await secureFetch("/api/merchant/withdrawals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchantId, payout_account_id: selectedAccount, amount: parseFloat(amount) })
@@ -3613,7 +3646,7 @@ const ApiDocs = () => {
                 const amount = (document.querySelector('input[type="number"]') as HTMLInputElement).value;
                 toast.loading("Initiating test payment...");
                 try {
-                  const res = await fetch("/api/bkash/create-payment", {
+                  const res = await secureFetch("/api/bkash/create-payment", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ amount, invoice: `TEST-${Date.now()}`, merchantId }),
@@ -3677,6 +3710,7 @@ const AdminLogin = () => {
       const data = await res.json();
       
       if (res.ok && data.success) {
+        localStorage.setItem("token", data.token);
         localStorage.setItem("isAdmin", "true");
         localStorage.setItem("user", JSON.stringify(data.user));
         localStorage.setItem("userId", data.user.id);
@@ -4003,7 +4037,7 @@ const UserProfile = () => {
 
     setIsUploadingAvatar(true);
     try {
-      const res = await fetch("/api/admin/profile/upload-avatar", {
+      const res = await secureFetch("/api/admin/profile/upload-avatar", {
         method: "POST",
         body: formData,
       });
@@ -4041,7 +4075,7 @@ const UserProfile = () => {
     
     setIsUpdatingCreds(true);
     try {
-      const res = await fetch("/api/admin/update-credentials", {
+      const res = await secureFetch("/api/admin/update-credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(credentials),
@@ -4210,7 +4244,7 @@ const Analytics = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/analytics")
+    secureFetch("/api/admin/analytics")
       .then(res => res.json())
       .then(setData)
       .finally(() => setLoading(false));
@@ -4307,7 +4341,7 @@ const Customers = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/customers")
+    secureFetch("/api/admin/customers")
       .then(res => res.json())
       .then(setCustomers)
       .finally(() => setLoading(false));
@@ -4372,7 +4406,7 @@ const Statements = () => {
   const fetchStatement = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/statement?from=${from}&to=${to}`);
+      const res = await secureFetch(`/api/admin/statement?from=${from}&to=${to}`);
       const data = await res.json();
       setTransactions(data);
     } catch (err) {
@@ -4607,7 +4641,7 @@ const SearchTransaction = () => {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch("/api/bkash/search-transaction", {
+      const res = await secureFetch("/api/bkash/search-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trxID }),
@@ -4785,7 +4819,7 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await secureFetch("/api/admin/users");
       const data = await res.json();
       setUsers(data);
     } catch (err) {
@@ -4805,7 +4839,7 @@ const UserManagement = () => {
     const method = editingUser ? "PUT" : "POST";
 
     try {
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -4826,7 +4860,7 @@ const UserManagement = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
-      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const res = await secureFetch(`/api/admin/users/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("User deleted");
         fetchUsers();
@@ -5068,7 +5102,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       if (localStorage.getItem("isAdmin") === "true" && user.id) {
         try {
-          const res = await fetch(`/api/user/profile?userId=${user.id}`);
+          const res = await secureFetch(`/api/user/profile?userId=${user.id}`);
           const data = await res.json();
           if (res.ok) {
             localStorage.setItem("user", JSON.stringify(data));
@@ -5086,6 +5120,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const checkAuth = () => {
       const isAdmin = localStorage.getItem("isAdmin") === "true";
+      const token = localStorage.getItem("token");
+
+      if (isAdmin && !token && pathname.startsWith("/admin") && pathname !== "/admin/login") {
+        localStorage.removeItem("isAdmin");
+        localStorage.removeItem("user");
+        setIsAdmin(false);
+        navigate("/admin/login");
+        return;
+      }
+
       setIsAdmin(isAdmin);
       
       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -5316,7 +5360,7 @@ export default function App() {
   useEffect(() => {
     const checkInstallation = async () => {
       try {
-        const response = await fetch("/api/install/status");
+        const response = await secureFetch("/api/install/status");
         const data = await response.json();
         setIsInstalled(data.installed);
       } catch (error) {
