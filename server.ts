@@ -7,6 +7,10 @@ import path from "path";
 import dotenv from "dotenv";
 import fs from "fs";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -221,7 +225,7 @@ const initDb = async () => {
     { key: 'BKASH_USERNAME', value: '01997473177' },
     { key: 'BKASH_PASSWORD', value: 'V9^@JbA_$6x' },
     { key: 'BKASH_BASE_URL', value: 'https://tokenized.pay.bka.sh/v1.2.0-beta' },
-    { key: 'APP_URL', value: process.env.APP_URL || "https://bkash.egoluck.com" },
+    { key: 'APP_URL', value: process.env.APP_URL || "https://ais-dev-zo4o2htltqug2iq63omyd6-115395507089.asia-east1.run.app" },
     { key: 'ADMIN_USERNAME', value: 'admin' },
     { key: 'ADMIN_PASSWORD', value: 'admin123' }
   ];
@@ -233,6 +237,7 @@ const initDb = async () => {
   // Seed default admin user
   const adminUsername = await getSetting("ADMIN_USERNAME", "admin");
   const adminPassword = await getSetting("ADMIN_PASSWORD", "admin123");
+  const hashedAdminPassword = await hashPassword(adminPassword);
   const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements,withdrawals,subscriptions";
   
   // Check if admin exists
@@ -242,23 +247,114 @@ const initDb = async () => {
       "INSERT INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
       uuidv4(),
       adminUsername,
-      "admin@bkash-pay.com",
-      adminPassword,
+      "mohammadshawon24434@gmail.com",
+      hashedAdminPassword,
       "admin",
       allPermissions
     );
   } else {
-    // Ensure admin has all permissions
+    // Ensure admin has all permissions and hashed password if it's the default one
+    if (existingAdmin.password === adminPassword) {
+      await db.run("UPDATE users SET password = ? WHERE username = ?", hashedAdminPassword, adminUsername);
+    }
     await db.run("UPDATE users SET permissions = ? WHERE username = ?", allPermissions, adminUsername);
   }
 
   // Update existing merchants with new permissions
   const merchantPermissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
   await db.run("UPDATE users SET permissions = ? WHERE role = 'merchant'", merchantPermissions);
+
+  // Update APP_URL to current environment if possible
+  if (process.env.APP_URL) {
+    await db.run("UPDATE settings SET value = ? WHERE key = 'APP_URL'", process.env.APP_URL);
+  }
+
+  // Seed sample transactions if empty
+  const txCount = await db.get("SELECT COUNT(*) as count FROM transactions");
+  if (txCount.count === 0) {
+    const statuses = ['completed', 'completed', 'completed', 'failed', 'initiated', 'refunded'];
+    const amounts = [500, 1200, 2500, 150, 3000, 750];
+    const msisdns = ['01712345678', '01987654321', '01811223344', '01555667788', '01612344321', '01311223344'];
+    
+    for (let i = 0; i < 15; i++) {
+      const status = statuses[Math.floor(Math.random() * statuses.length)];
+      const amount = amounts[Math.floor(Math.random() * amounts.length)];
+      const msisdn = msisdns[Math.floor(Math.random() * msisdns.length)];
+      const date = new Date();
+      date.setDate(date.getDate() - Math.floor(Math.random() * 7));
+      
+      await db.run(
+        "INSERT INTO transactions (id, payment_id, trx_id, amount, status, customer_msisdn, merchant_invoice, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        uuidv4(),
+        `PAY-${uuidv4().slice(0, 8)}`,
+        status === 'completed' ? `TRX-${uuidv4().slice(0, 8).toUpperCase()}` : null,
+        amount,
+        status,
+        msisdn,
+        `INV-100${i}`,
+        date.toISOString()
+      );
+    }
+  }
 };
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for development ease, or configure properly
+}));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+
+app.use("/api/", limiter);
+
+const JWT_SECRET = process.env.JWT_SECRET || "bkash-payment-gateway-secret-key-2024";
+
+// Security Helpers
+const hashPassword = async (password: string) => {
+  const salt = await bcrypt.genSalt(10);
+  return await bcrypt.hash(password, salt);
+};
+
+const comparePassword = async (password: string, hash: string) => {
+  return await bcrypt.compare(password, hash);
+};
+
+const generateToken = (user: any) => {
+  return jwt.sign(
+    { id: user.id, username: user.username, role: user.role, merchant_id: user.merchant_id },
+    JWT_SECRET,
+    { expiresIn: "24h" }
+  );
+};
+
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ error: "Access denied. No token provided." });
+
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+    if (err) return res.status(403).json({ error: "Invalid or expired token." });
+    req.user = user;
+    next();
+  });
+};
+
+const authorizeRole = (roles: string[]) => {
+  return (req: any, res: any, next: any) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Access denied. Insufficient permissions." });
+    }
+    next();
+  };
+};
 
 console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 
@@ -285,12 +381,24 @@ const upload = multer({
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Vite setup for development
+let vite: any;
+if (process.env.NODE_ENV !== "production") {
+  const { createServer: createViteServer } = await import("vite");
+  vite = await createViteServer({
+    root: __dirname,
+    server: { 
+      middlewareMode: true,
+      hmr: false
+    },
+    appType: "custom",
+  });
+  app.use(vite.middlewares);
+}
+
 // Static fallback for production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.resolve(__dirname, "dist")));
-  app.get("*", (req, res) => {
-    res.sendFile(path.resolve(__dirname, "dist", "index.html"));
-  });
 }
 
 // Installer API
@@ -338,6 +446,7 @@ app.post("/api/install", async (req, res) => {
 
     // Update admin user if credentials changed
     if (ADMIN_USERNAME && ADMIN_PASSWORD) {
+      const hashedPassword = await hashPassword(ADMIN_PASSWORD);
       const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements,withdrawals,subscriptions";
       await db.run("DELETE FROM users WHERE role = 'admin'");
       await db.run(
@@ -345,7 +454,7 @@ app.post("/api/install", async (req, res) => {
         uuidv4(),
         ADMIN_USERNAME,
         "admin@bkash-pay.com",
-        ADMIN_PASSWORD,
+        hashedPassword,
         "admin",
         allPermissions
       );
@@ -522,17 +631,19 @@ app.post("/api/admin/login", async (req, res) => {
   const { username, password } = req.body;
   
   try {
-    const user = await db.get("SELECT * FROM users WHERE (username = ? OR email = ?) AND password = ?", username, username, password);
+    const user = await db.get("SELECT * FROM users WHERE username = ? OR email = ?", username, username);
 
-    if (user) {
+    if (user && await comparePassword(password, user.password)) {
       let merchant = null;
       if (user.merchant_id) {
         merchant = await db.get("SELECT * FROM merchants WHERE id = ?", user.merchant_id);
       }
 
+      const token = generateToken(user);
       await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
       res.json({ 
         success: true, 
+        token,
         user: {
           id: user.id,
           username: user.username,
@@ -554,12 +665,9 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-app.get("/api/user/profile", async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: "User ID required" });
-  
+app.get("/api/user/profile", authenticateToken, async (req: any, res) => {
   try {
-    const user = await db.get("SELECT * FROM users WHERE id = ?", userId);
+    const user = await db.get("SELECT id, username, email, role, permissions, avatar, merchant_id FROM users WHERE id = ?", req.user.id);
     if (!user) return res.status(404).json({ error: "User not found" });
     
     let merchant = null;
@@ -595,6 +703,7 @@ app.post("/api/merchant/register", async (req, res) => {
     const merchantId = uuidv4();
     const userId = uuidv4();
     const apiKey = `bk_${uuidv4().replace(/-/g, '')}`;
+    const hashedPassword = await hashPassword(password);
 
     await db.run(
       "INSERT INTO merchants (id, name, email, api_key) VALUES (?, ?, ?, ?)",
@@ -604,7 +713,7 @@ app.post("/api/merchant/register", async (req, res) => {
     const permissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
     await db.run(
       "INSERT INTO users (id, username, email, password, role, permissions, merchant_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      userId, email, email, password, "merchant", permissions, merchantId
+      userId, email, email, hashedPassword, "merchant", permissions, merchantId
     );
 
     res.json({ success: true, message: "Merchant registered successfully" });
@@ -614,8 +723,10 @@ app.post("/api/merchant/register", async (req, res) => {
   }
 });
 
-app.get("/api/merchant/settings", async (req, res) => {
-  const { merchantId } = req.query;
+app.get("/api/merchant/settings", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+  
   try {
     const merchant = await db.get("SELECT * FROM merchants WHERE id = ?", merchantId);
     res.json(merchant);
@@ -624,8 +735,11 @@ app.get("/api/merchant/settings", async (req, res) => {
   }
 });
 
-app.post("/api/merchant/settings", async (req, res) => {
-  const { merchantId, payment_mode, bkash_app_key, bkash_app_secret, bkash_username, bkash_password } = req.body;
+app.post("/api/merchant/settings", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+  
+  const { payment_mode, bkash_app_key, bkash_app_secret, bkash_username, bkash_password } = req.body;
   try {
     await db.run(
       "UPDATE merchants SET payment_mode = ?, bkash_app_key = ?, bkash_app_secret = ?, bkash_username = ?, bkash_password = ? WHERE id = ?",
@@ -638,8 +752,10 @@ app.post("/api/merchant/settings", async (req, res) => {
 });
 
 // Payout Accounts
-app.get("/api/merchant/payout-accounts", async (req, res) => {
-  const { merchantId } = req.query;
+app.get("/api/merchant/payout-accounts", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
   try {
     const accounts = await db.all("SELECT * FROM payout_accounts WHERE merchant_id = ?", merchantId);
     res.json(accounts);
@@ -648,8 +764,11 @@ app.get("/api/merchant/payout-accounts", async (req, res) => {
   }
 });
 
-app.post("/api/merchant/payout-accounts", async (req, res) => {
-  const { merchantId, type, provider, account_number, account_name, bank_branch, routing_number } = req.body;
+app.post("/api/merchant/payout-accounts", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
+  const { type, provider, account_number, account_name, bank_branch, routing_number } = req.body;
   try {
     const id = uuidv4();
     await db.run(
@@ -662,10 +781,13 @@ app.post("/api/merchant/payout-accounts", async (req, res) => {
   }
 });
 
-app.delete("/api/merchant/payout-accounts/:id", async (req, res) => {
+app.delete("/api/merchant/payout-accounts/:id", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
   const { id } = req.params;
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
   try {
-    await db.run("DELETE FROM payout_accounts WHERE id = ?", id);
+    await db.run("DELETE FROM payout_accounts WHERE id = ? AND merchant_id = ?", id, merchantId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete payout account" });
@@ -673,8 +795,10 @@ app.delete("/api/merchant/payout-accounts/:id", async (req, res) => {
 });
 
 // Withdrawals
-app.get("/api/merchant/withdrawals", async (req, res) => {
-  const { merchantId } = req.query;
+app.get("/api/merchant/withdrawals", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
   try {
     const withdrawals = await db.all(
       "SELECT w.*, p.account_number, p.provider FROM withdrawals w JOIN payout_accounts p ON w.payout_account_id = p.id WHERE w.merchant_id = ? ORDER BY w.created_at DESC",
@@ -686,8 +810,11 @@ app.get("/api/merchant/withdrawals", async (req, res) => {
   }
 });
 
-app.post("/api/merchant/withdrawals", async (req, res) => {
-  const { merchantId, payout_account_id, amount } = req.body;
+app.post("/api/merchant/withdrawals", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
+  const { payout_account_id, amount } = req.body;
   try {
     const merchant = await db.get("SELECT balance FROM merchants WHERE id = ?", merchantId);
     if (!merchant || merchant.balance < amount) {
@@ -711,7 +838,7 @@ app.post("/api/merchant/withdrawals", async (req, res) => {
 });
 
 // Admin Withdrawal Management
-app.get("/api/admin/withdrawals", async (req, res) => {
+app.get("/api/admin/withdrawals", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const withdrawals = await db.all(
       "SELECT w.*, m.name as merchant_name, p.account_number, p.provider, p.type as account_type, p.account_name, p.bank_branch, p.routing_number FROM withdrawals w JOIN merchants m ON w.merchant_id = m.id JOIN payout_accounts p ON w.payout_account_id = p.id ORDER BY w.created_at DESC"
@@ -722,7 +849,7 @@ app.get("/api/admin/withdrawals", async (req, res) => {
   }
 });
 
-app.post("/api/admin/withdrawals/status", async (req, res) => {
+app.post("/api/admin/withdrawals/status", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id, status, admin_note } = req.body;
   try {
     const withdrawal = await db.get("SELECT * FROM withdrawals WHERE id = ?", id);
@@ -750,7 +877,7 @@ app.get("/api/subscription-plans", async (req, res) => {
   }
 });
 
-app.post("/api/admin/subscription-plans", async (req, res) => {
+app.post("/api/admin/subscription-plans", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { name, description, price, duration_days, features } = req.body;
   try {
     const id = uuidv4();
@@ -765,8 +892,10 @@ app.post("/api/admin/subscription-plans", async (req, res) => {
 });
 
 // Merchant Subscriptions
-app.get("/api/merchant/subscription", async (req, res) => {
-  const { merchantId } = req.query;
+app.get("/api/merchant/subscription", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
   try {
     const sub = await db.get(
       "SELECT s.*, p.name as plan_name FROM subscriptions s JOIN subscription_plans p ON s.plan_id = p.id WHERE s.merchant_id = ? AND s.status = 'ACTIVE' ORDER BY s.created_at DESC LIMIT 1",
@@ -778,8 +907,11 @@ app.get("/api/merchant/subscription", async (req, res) => {
   }
 });
 
-app.post("/api/merchant/subscribe", async (req, res) => {
-  const { merchantId, planId } = req.body;
+app.post("/api/merchant/subscribe", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
+  const { planId } = req.body;
   try {
     const plan = await db.get("SELECT * FROM subscription_plans WHERE id = ?", planId);
     if (!plan) return res.status(404).json({ error: "Plan not found" });
@@ -853,7 +985,7 @@ app.get("/api/bkash/subscription-callback", async (req, res) => {
   res.redirect("/admin/subscriptions?status=failed");
 });
 
-app.get("/api/admin/merchant-subscriptions", async (req, res) => {
+app.get("/api/admin/merchant-subscriptions", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const subs = await db.all(
       "SELECT s.*, m.name as merchant_name, m.email as merchant_email, p.name as plan_name, p.price FROM subscriptions s JOIN merchants m ON s.merchant_id = m.id JOIN subscription_plans p ON s.plan_id = p.id ORDER BY s.created_at DESC"
@@ -869,18 +1001,17 @@ app.post("/api/admin/forgot-password", async (req, res) => {
   try {
     const user = await db.get("SELECT * FROM users WHERE email = ?", email);
     if (user) {
-      // In a real app, send email. Here we just return success.
+      // In a real app, send email with a secure token.
       await auditLog("FORGOT_PASSWORD_REQUEST", email, "Password reset requested");
-      res.json({ message: "Password reset instructions sent to your email." });
-    } else {
-      res.status(404).json({ error: "Email not found" });
     }
+    // Always return the same message to prevent user enumeration
+    res.json({ message: "If an account exists with that email, password reset instructions have been sent." });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.post("/api/admin/update-credentials", async (req, res) => {
+app.post("/api/admin/update-credentials", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
@@ -888,9 +1019,11 @@ app.post("/api/admin/update-credentials", async (req, res) => {
   }
 
   try {
+    const hashedPassword = await hashPassword(password);
     await db.exec("BEGIN TRANSACTION");
     await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "ADMIN_USERNAME", username);
-    await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "ADMIN_PASSWORD", password);
+    await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "ADMIN_PASSWORD", password); // Keep raw in settings for installer/re-init if needed, but users table is hashed
+    await db.run("UPDATE users SET username = ?, password = ? WHERE role = 'admin'", username, hashedPassword);
     await db.exec("COMMIT");
     
     await auditLog("CREDENTIALS_UPDATE", username, "Admin credentials updated");
@@ -903,7 +1036,7 @@ app.post("/api/admin/update-credentials", async (req, res) => {
 
 // --- Merchant Management API ---
 
-app.get("/api/admin/merchants", async (req, res) => {
+app.get("/api/admin/merchants", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const merchants = await db.all("SELECT * FROM merchants ORDER BY created_at DESC");
     res.json(merchants);
@@ -912,7 +1045,7 @@ app.get("/api/admin/merchants", async (req, res) => {
   }
 });
 
-app.post("/api/admin/merchants/status", async (req, res) => {
+app.post("/api/admin/merchants/status", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id, status } = req.body;
   try {
     await db.run("UPDATE merchants SET status = ? WHERE id = ?", status, id);
@@ -923,7 +1056,7 @@ app.post("/api/admin/merchants/status", async (req, res) => {
   }
 });
 
-app.post("/api/admin/merchants/permissions", async (req, res) => {
+app.post("/api/admin/merchants/permissions", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id, permissions } = req.body;
   try {
     await db.run("UPDATE merchants SET permissions = ? WHERE id = ?", JSON.stringify(permissions), id);
@@ -936,7 +1069,7 @@ app.post("/api/admin/merchants/permissions", async (req, res) => {
   }
 });
 
-app.post("/api/admin/merchants/kyc-verify", async (req, res) => {
+app.post("/api/admin/merchants/kyc-verify", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id, status } = req.body;
   try {
     await db.run("UPDATE merchants SET kyc_status = ? WHERE id = ?", status, id);
@@ -947,8 +1080,10 @@ app.post("/api/admin/merchants/kyc-verify", async (req, res) => {
   }
 });
 
-app.get("/api/merchant/kyc", async (req, res) => {
-  const { merchantId } = req.query;
+app.get("/api/merchant/kyc", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
   try {
     const merchant = await db.get("SELECT kyc_status, kyc_details FROM merchants WHERE id = ?", merchantId);
     res.json(merchant);
@@ -957,18 +1092,31 @@ app.get("/api/merchant/kyc", async (req, res) => {
   }
 });
 
-app.post("/api/merchant/kyc", async (req, res) => {
-  const { merchantId, details } = req.body;
+app.post("/api/merchant/kyc", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
+  const merchantId = req.user.merchant_id;
+  if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
+
+  const { details } = req.body;
   try {
     await db.run("UPDATE merchants SET kyc_status = 'SUBMITTED', kyc_details = ? WHERE id = ?", JSON.stringify(details), merchantId);
-    await auditLog("MERCHANT_KYC_SUBMIT", merchantId as string, details);
+    await auditLog("MERCHANT_KYC_SUBMIT", merchantId, details);
     res.json({ message: "KYC submitted successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to submit KYC" });
   }
 });
-app.get("/api/admin/stats", async (req, res) => {
+app.get("/api/admin/stats", authenticateToken, async (req: any, res) => {
   const { merchantId } = req.query;
+  const user = req.user;
+
+  // If merchant, they can only see their own stats
+  if (user.role === 'merchant' && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied. You can only view your own stats." });
+  }
+
+  // If admin, they can see everything, but if they provide a merchantId, it filters
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
   try {
     let volumeQuery = "SELECT SUM(amount) as total FROM transactions WHERE status = 'completed'";
     let successCountQuery = "SELECT COUNT(*) as count FROM transactions WHERE status = 'completed'";
@@ -978,14 +1126,14 @@ app.get("/api/admin/stats", async (req, res) => {
     let activityQuery = "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5";
     const params: any[] = [];
 
-    if (merchantId) {
+    if (effectiveMerchantId) {
       volumeQuery += " AND merchant_id = ?";
       successCountQuery += " AND merchant_id = ?";
       failedCountQuery += " AND merchant_id = ?";
       totalCountQuery += " WHERE merchant_id = ?";
       recentQuery = "SELECT * FROM transactions WHERE merchant_id = ? ORDER BY created_at DESC LIMIT 10";
       activityQuery = "SELECT * FROM audit_logs WHERE user = ? OR details LIKE ? ORDER BY created_at DESC LIMIT 5";
-      params.push(merchantId);
+      params.push(effectiveMerchantId);
     }
 
     const totalVolume = await db.get(volumeQuery, ...params);
@@ -1015,15 +1163,23 @@ app.get("/api/admin/stats", async (req, res) => {
   }
 });
 
-app.get("/api/admin/transactions", async (req, res) => {
+app.get("/api/admin/transactions", authenticateToken, async (req: any, res) => {
   const { start_date, end_date, search, merchantId } = req.query;
+  const user = req.user;
+
+  if (user.role === 'merchant' && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
   try {
     let query = "SELECT * FROM transactions WHERE 1=1";
     const params: any[] = [];
 
-    if (merchantId) {
+    if (effectiveMerchantId) {
       query += " AND merchant_id = ?";
-      params.push(merchantId);
+      params.push(effectiveMerchantId);
     }
     if (start_date) {
       query += " AND DATE(created_at) >= DATE(?)";
@@ -1047,7 +1203,7 @@ app.get("/api/admin/transactions", async (req, res) => {
   }
 });
 
-app.get("/api/admin/settings", async (req, res) => {
+app.get("/api/admin/settings", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const keys = ["BKASH_APP_KEY", "BKASH_APP_SECRET", "BKASH_USERNAME", "BKASH_PASSWORD", "BKASH_BASE_URL", "APP_URL"];
   const settings: any = {};
   for (const key of keys) {
@@ -1056,7 +1212,7 @@ app.get("/api/admin/settings", async (req, res) => {
   res.json(settings);
 });
 
-app.post("/api/admin/settings", async (req, res) => {
+app.post("/api/admin/settings", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const settings = req.body;
   
   try {
@@ -1074,11 +1230,12 @@ app.post("/api/admin/settings", async (req, res) => {
   }
 });
 
-app.post("/api/bkash/refund", async (req, res) => {
+app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
   try {
-    const { paymentID, trxID, amount, sku, reason, userRole, merchantId: requesterMerchantId } = req.body;
+    const { paymentID, trxID, amount, sku, reason } = req.body;
+    const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || "";
-    const initiated_by = userRole || "admin";
+    const initiated_by = user.username;
     
     // Check transaction ownership and mode
     const transaction = await db.get("SELECT merchant_id, payment_mode FROM transactions WHERE trx_id = ?", trxID);
@@ -1088,14 +1245,14 @@ app.post("/api/bkash/refund", async (req, res) => {
     }
 
     // Strict rule: Super Admin cannot refund ANY transaction belonging to a merchant
-    if (userRole === 'admin' && transaction.merchant_id) {
+    if (user.role === 'admin' && transaction.merchant_id) {
       return res.status(403).json({ 
         error: "Super Admin is restricted from refunding merchant transactions. Merchants must handle their own refunds." 
       });
     }
 
     // If it's a merchant trying to refund, ensure they own the transaction
-    if (userRole === 'merchant' && transaction.merchant_id !== requesterMerchantId) {
+    if (user.role === 'merchant' && transaction.merchant_id !== user.merchant_id) {
       return res.status(403).json({ error: "Unauthorized: You can only refund your own transactions." });
     }
 
@@ -1165,11 +1322,21 @@ app.post("/api/bkash/refund", async (req, res) => {
   }
 });
 
-app.post("/api/bkash/search-transaction", async (req, res) => {
+app.post("/api/bkash/search-transaction", authenticateToken, async (req: any, res) => {
   try {
     const { trxID } = req.body;
+    const user = req.user;
+
     if (!trxID) {
       return res.status(400).json({ error: "trxID is required" });
+    }
+
+    // If merchant, check ownership
+    if (user.role === 'merchant') {
+      const transaction = await db.get("SELECT merchant_id FROM transactions WHERE trx_id = ?", trxID);
+      if (transaction && transaction.merchant_id !== user.merchant_id) {
+        return res.status(403).json({ error: "Access denied." });
+      }
     }
 
     const headers = await getBkashHeaders();
@@ -1189,29 +1356,47 @@ app.post("/api/bkash/search-transaction", async (req, res) => {
   }
 });
 
-app.get("/api/admin/analytics", async (req, res) => {
+app.get("/api/admin/analytics", authenticateToken, async (req: any, res) => {
+  const { merchantId } = req.query;
+  const user = req.user;
+
+  if (user.role === 'merchant' && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
   try {
-    const last7Days = await db.all(`
+    let last7DaysQuery = `
       SELECT DATE(created_at) as date, SUM(amount) as total, COUNT(*) as count 
       FROM transactions 
       WHERE status = 'completed' AND created_at >= date('now', '-7 days')
-      GROUP BY DATE(created_at)
-      ORDER BY date ASC
-    `);
-
-    const statusDistribution = await db.all(`
+    `;
+    let statusDistQuery = `
       SELECT status, COUNT(*) as count 
       FROM transactions 
-      GROUP BY status
-    `);
-
-    const hourlyVolume = await db.all(`
+    `;
+    let hourlyVolumeQuery = `
       SELECT STRFTIME('%H', created_at) as hour, SUM(amount) as total
       FROM transactions
       WHERE status = 'completed'
-      GROUP BY hour
-      ORDER BY hour ASC
-    `);
+    `;
+    const params: any[] = [];
+
+    if (effectiveMerchantId) {
+      last7DaysQuery += " AND merchant_id = ?";
+      statusDistQuery += " WHERE merchant_id = ?";
+      hourlyVolumeQuery += " AND merchant_id = ?";
+      params.push(effectiveMerchantId);
+    }
+
+    last7DaysQuery += " GROUP BY DATE(created_at) ORDER BY date ASC";
+    statusDistQuery += " GROUP BY status";
+    hourlyVolumeQuery += " GROUP BY hour ORDER BY hour ASC";
+
+    const last7Days = await db.all(last7DaysQuery, ...params);
+    const statusDistribution = await db.all(statusDistQuery, ...params);
+    const hourlyVolume = await db.all(hourlyVolumeQuery, ...params);
 
     res.json({ last7Days, statusDistribution, hourlyVolume });
   } catch (error) {
@@ -1219,9 +1404,18 @@ app.get("/api/admin/analytics", async (req, res) => {
   }
 });
 
-app.get("/api/admin/customers", async (req, res) => {
+app.get("/api/admin/customers", authenticateToken, async (req: any, res) => {
+  const { merchantId } = req.query;
+  const user = req.user;
+
+  if (user.role === 'merchant' && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
   try {
-    const customers = await db.all(`
+    let query = `
       SELECT 
         customer_msisdn as msisdn, 
         COUNT(*) as total_transactions, 
@@ -1229,34 +1423,64 @@ app.get("/api/admin/customers", async (req, res) => {
         MAX(created_at) as last_transaction
       FROM transactions 
       WHERE status = 'completed' AND customer_msisdn IS NOT NULL
-      GROUP BY customer_msisdn
-      ORDER BY total_spent DESC
-    `);
+    `;
+    const params: any[] = [];
+
+    if (effectiveMerchantId) {
+      query += " AND merchant_id = ?";
+      params.push(effectiveMerchantId);
+    }
+
+    query += " GROUP BY customer_msisdn ORDER BY total_spent DESC";
+    const customers = await db.all(query, ...params);
     res.json(customers);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch customers" });
   }
 });
 
-app.get("/api/admin/statement", async (req, res) => {
-  const { from, to } = req.query;
+app.get("/api/admin/statement", authenticateToken, async (req: any, res) => {
+  const { from, to, merchantId } = req.query;
+  const user = req.user;
+
+  if (user.role === 'merchant' && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
   try {
-    const transactions = await db.all(`
+    let query = `
       SELECT * FROM transactions 
       WHERE status = 'completed' 
       AND DATE(created_at) >= DATE(?) 
       AND DATE(created_at) <= DATE(?)
-      ORDER BY created_at ASC
-    `, from, to);
+    `;
+    const params: any[] = [from, to];
+
+    if (effectiveMerchantId) {
+      query += " AND merchant_id = ?";
+      params.push(effectiveMerchantId);
+    }
+
+    query += " ORDER BY created_at ASC";
+    const transactions = await db.all(query, ...params);
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ error: "Failed to generate statement" });
   }
 });
 
-app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req: any, res) => {
+app.post("/api/admin/profile/upload-avatar", authenticateToken, upload.single("avatar"), async (req: any, res) => {
   try {
     const { userId } = req.body;
+    const user = req.user;
+
+    // Ensure users can only update their own avatar unless admin
+    if (user.role !== 'admin' && user.id !== userId) {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
@@ -1268,7 +1492,7 @@ app.post("/api/admin/profile/upload-avatar", upload.single("avatar"), async (req
   }
 });
 
-app.post("/api/admin/settings/upload-logo", upload.single("logo"), async (req: any, res) => {
+app.post("/api/admin/settings/upload-logo", authenticateToken, authorizeRole(['admin']), upload.single("logo"), async (req: any, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -1281,17 +1505,17 @@ app.post("/api/admin/settings/upload-logo", upload.single("logo"), async (req: a
   }
 });
 
-app.get("/api/admin/logs", async (req, res) => {
+app.get("/api/admin/logs", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const logs = await db.all("SELECT * FROM logs ORDER BY created_at DESC LIMIT 100");
   res.json(logs);
 });
 
-app.get("/api/admin/audit-logs", async (req, res) => {
+app.get("/api/admin/audit-logs", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const logs = await db.all("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100");
   res.json(logs);
 });
 
-app.post("/api/admin/test-bkash", async (req, res) => {
+app.post("/api/admin/test-bkash", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const headers = await getBkashHeaders();
     res.json({ success: true, message: "Connection successful", token: headers.Authorization.substring(0, 10) + "..." });
@@ -1300,32 +1524,44 @@ app.post("/api/admin/test-bkash", async (req, res) => {
   }
 });
 
-app.get("/api/admin/transaction-search", async (req, res) => {
+app.get("/api/admin/transaction-search", authenticateToken, async (req: any, res) => {
   const { trx_id } = req.query;
-  const transaction = await db.get("SELECT * FROM transactions WHERE trx_id = ?", trx_id);
-  res.json(transaction || null);
+  const user = req.user;
+
+  try {
+    const transaction = await db.get("SELECT * FROM transactions WHERE trx_id = ?", trx_id);
+    
+    if (transaction && user.role === 'merchant' && transaction.merchant_id !== user.merchant_id) {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    res.json(transaction || null);
+  } catch (error) {
+    res.status(500).json({ error: "Search failed" });
+  }
 });
 
 // User Management Routes
-app.get("/api/admin/users", async (req, res) => {
+app.get("/api/admin/users", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const users = await db.all("SELECT id, username, role, permissions, created_at FROM users");
+    const users = await db.all("SELECT id, username, email, role, permissions, avatar, created_at FROM users");
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
-app.post("/api/admin/users", async (req, res) => {
+app.post("/api/admin/users", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { username, email, password, role, permissions } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
   }
   try {
     const id = uuidv4();
+    const hashedPassword = await hashPassword(password);
     await db.run(
       "INSERT INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
-      id, username, email, password, role, permissions.join(",")
+      id, username, email, hashedPassword, role, permissions.join(",")
     );
     await auditLog("USER_CREATED", "admin", { username, role });
     res.json({ success: true, id });
@@ -1334,14 +1570,15 @@ app.post("/api/admin/users", async (req, res) => {
   }
 });
 
-app.put("/api/admin/users/:id", async (req, res) => {
+app.put("/api/admin/users/:id", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const { username, email, password, role, permissions } = req.body;
   try {
     if (password) {
+      const hashedPassword = await hashPassword(password);
       await db.run(
         "UPDATE users SET username = ?, email = ?, password = ?, role = ?, permissions = ? WHERE id = ?",
-        username, email, password, role, permissions.join(","), id
+        username, email, hashedPassword, role, permissions.join(","), id
       );
     } else {
       await db.run(
@@ -1356,7 +1593,7 @@ app.put("/api/admin/users/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/admin/users/:id", async (req, res) => {
+app.delete("/api/admin/users/:id", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   try {
     const user = await db.get("SELECT username FROM users WHERE id = ?", id);
@@ -1372,18 +1609,26 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 async function startServer() {
   await initDb();
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      root: __dirname,
-      server: { 
-        middlewareMode: true,
-        hmr: false
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  }
+  // SPA fallback
+  app.get("*", async (req, res, next) => {
+    if (req.originalUrl.startsWith('/api')) return next();
+    
+    if (process.env.NODE_ENV !== "production" && vite) {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      res.sendFile(path.resolve(__dirname, "dist", "index.html"));
+    } else {
+      next();
+    }
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

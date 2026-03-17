@@ -239,22 +239,34 @@ interface Refund {
 
 // --- Components ---
 
+const BkashLogo = ({ className }: { className?: string }) => (
+  <div className={cn("flex items-center gap-3", className)}>
+    <div className="w-11 h-11 bg-bkash rounded-2xl flex items-center justify-center shadow-xl shadow-bkash/30 rotate-3 hover:rotate-0 transition-transform duration-300">
+      <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-7 h-7 object-contain brightness-0 invert" />
+    </div>
+    <div>
+      <h1 className="font-black text-xl leading-none tracking-tighter text-bkash">bKash <span className="text-surface-900 dark:text-white">Pay</span></h1>
+      <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest mt-1">Enterprise</p>
+    </div>
+  </div>
+);
+
 const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
     className={cn(
-      "w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group relative",
+      "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative",
       active 
-        ? "bg-bkash text-white shadow-lg shadow-bkash/20" 
-        : "text-surface-500 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-900 hover:text-surface-900 dark:hover:text-white"
+        ? "bg-bkash text-white shadow-lg shadow-bkash/25" 
+        : "text-surface-500 dark:text-surface-400 hover:bg-bkash/5 dark:hover:bg-bkash/10 hover:text-bkash"
     )}
   >
-    <Icon size={18} className={cn("transition-all duration-300", active ? "scale-110" : "group-hover:scale-110 group-hover:text-bkash")} />
-    <span className={cn("font-semibold text-sm tracking-tight transition-all duration-300", active ? "translate-x-1" : "group-hover:translate-x-1")}>{label}</span>
+    <Icon size={18} className={cn("transition-all duration-300", active ? "scale-110" : "group-hover:scale-110")} />
+    <span className={cn("font-bold text-sm tracking-tight transition-all duration-300", active ? "translate-x-1" : "group-hover:translate-x-1")}>{label}</span>
     {active && (
       <motion.div 
         layoutId="active-indicator" 
-        className="absolute left-0 w-1 h-6 bg-white rounded-r-full" 
+        className="absolute left-0 w-1.5 h-6 bg-white rounded-r-full" 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       />
@@ -265,15 +277,15 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   <motion.div 
     whileHover={{ y: -5 }}
-    className="bg-white dark:bg-surface-950 border border-surface-200 dark:border-surface-900 p-6 rounded-[2rem] shadow-sm hover:shadow-xl hover:shadow-bkash/5 transition-all duration-300 group"
+    className="bkash-card p-6 group"
   >
     <div className="flex justify-between items-start mb-4">
-      <div className={cn("p-3 rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-lg shadow-bkash/10", color || "bg-bkash")}>
+      <div className={cn("p-3 rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-lg", color || "bg-bkash shadow-bkash/20")}>
         <Icon className="text-white" size={24} />
       </div>
       {trend !== undefined && (
         <div className={cn(
-          "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase",
+          "flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase",
           trend >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
         )}>
           {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -282,32 +294,32 @@ const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
       )}
     </div>
     <div>
-      <p className="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
-      <h3 className="text-2xl md:text-3xl font-black tracking-tighter">{value}</h3>
+      <p className="text-surface-500 dark:text-surface-400 text-[10px] font-black uppercase tracking-widest mb-1">{title}</p>
+      <h3 className="text-2xl md:text-3xl font-black tracking-tighter text-surface-900 dark:text-white">{value}</h3>
     </div>
   </motion.div>
 );
 
 const TransactionRow = ({ tx }: { tx: Transaction, key?: string }) => (
-  <tr className="group border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
-    <td className="py-4 px-4">
+  <tr className="group border-b border-surface-100 dark:border-surface-900 hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors">
+    <td className="py-4 px-8">
       <div className="flex flex-col">
-        <span className="text-white font-medium text-sm">{tx.merchant_invoice || "N/A"}</span>
-        <span className="text-zinc-500 text-xs font-mono">{tx.payment_id}</span>
+        <span className="text-surface-900 dark:text-white font-semibold text-sm">{tx.merchant_invoice || "N/A"}</span>
+        <span className="text-surface-400 text-[10px] font-mono uppercase tracking-wider">{tx.payment_id}</span>
       </div>
     </td>
-    <td className="py-4 px-4">
-      <span className="text-zinc-300 text-sm">{tx.customer_msisdn || "Pending"}</span>
+    <td className="py-4 px-8">
+      <span className="text-surface-600 dark:text-surface-400 text-sm font-medium">{tx.customer_msisdn || "Pending"}</span>
     </td>
-    <td className="py-4 px-4">
-      <span className="text-white font-bold text-sm">{formatCurrency(tx.amount)}</span>
+    <td className="py-4 px-8">
+      <span className="text-surface-900 dark:text-white font-bold text-sm">{formatCurrency(tx.amount)}</span>
     </td>
-    <td className="py-4 px-4">
+    <td className="py-4 px-8">
       <span className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium capitalize",
-        tx.status === 'completed' ? "bg-bkash/10 text-bkash" : 
-        tx.status === 'refunded' ? "bg-rose-500/10 text-rose-500" :
-        tx.status === 'initiated' ? "bg-amber-500/10 text-amber-500" : "bg-rose-500/10 text-rose-500"
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+        tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : 
+        tx.status === 'refunded' ? "bg-amber-500/10 text-amber-500" :
+        tx.status === 'initiated' ? "bg-blue-500/10 text-blue-500" : "bg-rose-500/10 text-rose-500"
       )}>
         {tx.status === 'completed' ? <CheckCircle2 size={12} /> : 
          tx.status === 'refunded' ? <RotateCcw size={12} /> :
@@ -315,22 +327,17 @@ const TransactionRow = ({ tx }: { tx: Transaction, key?: string }) => (
         {tx.status}
       </span>
     </td>
-    <td className="py-4 px-4 text-right">
-      <div className="flex justify-end items-center gap-2">
-        <span className="text-zinc-500 text-xs">{new Date(tx.created_at).toLocaleString()}</span>
+    <td className="py-4 px-8 text-right">
+      <div className="flex justify-end items-center gap-3">
+        <span className="text-surface-400 text-[10px] font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleDateString()}</span>
         {tx.status === 'completed' && tx.payment_mode !== 'GLOBAL' && (
           <Link 
             to={`/admin/refunds?trx_id=${tx.trx_id}`}
-            className="p-1.5 text-zinc-500 hover:text-bkash transition-colors"
+            className="p-2 text-surface-400 hover:text-bkash hover:bg-bkash/5 rounded-lg transition-all"
             title="Refund"
           >
             <RotateCcw size={14} />
           </Link>
-        )}
-        {tx.payment_mode === 'GLOBAL' && tx.status === 'completed' && (
-          <span className="p-1.5 text-zinc-700 cursor-not-allowed" title="Global API - Non-refundable by Admin">
-            <Lock size={14} />
-          </span>
         )}
       </div>
     </td>
@@ -366,9 +373,9 @@ const Dashboard = () => {
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Volume" value={formatCurrency(stats?.totalVolume || 0)} icon={TrendingUp} trend={12.5} color="bg-bkash" />
-        <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-emerald-600" />
-        <StatCard title="Failed Payments" value={stats?.failedCount || 0} icon={XCircle} trend={-1.4} color="bg-rose-600" />
-        <StatCard title="Total Transactions" value={stats?.totalCount || 0} icon={Activity} color="bg-surface-600" />
+        <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-emerald-500" />
+        <StatCard title="Failed Payments" value={stats?.failedCount || 0} icon={XCircle} trend={-1.4} color="bg-rose-500" />
+        <StatCard title="Total Transactions" value={stats?.totalCount || 0} icon={Activity} color="bg-surface-800" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -520,7 +527,6 @@ const Checkout = () => {
       if (data.bkashURL) {
         setBkashURL(data.bkashURL);
         toast.success("Payment initiated! Redirecting...");
-        console.log("Redirecting to bKash:", data.bkashURL);
         
         const isIframe = window.self !== window.top;
         
@@ -547,77 +553,105 @@ const Checkout = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-2xl">
-        <div className="bg-bkash-dark border border-bkash-dark rounded-3xl overflow-hidden shadow-2xl">
-          <div className="bg-bkash p-6 md:p-8 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl flex items-center justify-center p-2 shrink-0">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-full h-full object-contain" />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="w-full max-w-md"
+      >
+        <div className="bg-white dark:bg-surface-900 rounded-[2.5rem] overflow-hidden shadow-2xl border border-surface-100 dark:border-surface-800">
+          {/* bKash Header */}
+          <div className="bg-bkash p-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+            <div className="relative z-10 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2 shadow-lg">
+                  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tighter">bKash Payment</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Secure Gateway</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl md:text-2xl font-bold">Secure Checkout</h3>
-                <p className="opacity-80 text-xs md:text-sm mt-0.5">Enterprise Payment Gateway</p>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">Amount</p>
+                <p className="text-xl font-black tracking-tighter">৳{amount}</p>
               </div>
             </div>
-            <Link 
-              to="/generate" 
-              className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-2"
-            >
-              <Zap size={18} /> Create Link
-            </Link>
-            <Link 
-              to="/admin/login" 
-              className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-2"
-            >
-              <ShieldCheck size={18} /> Admin Panel
-            </Link>
           </div>
-          <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-            <div className="space-y-3 md:space-y-4">
-              <label className="block text-xs md:text-sm font-medium text-zinc-400">Payment Amount (BDT)</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl md:text-2xl font-bold text-zinc-500">৳</span>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-bkash-dark/50 border-2 border-bkash-dark rounded-2xl py-3 md:py-4 pl-10 pr-4 text-2xl md:text-3xl font-bold text-white focus:border-bkash focus:outline-none transition-all" />
+
+          <div className="p-8 space-y-8">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-2">Invoice Number</label>
+                <div className="bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-800 rounded-2xl px-6 py-4 text-sm font-bold text-surface-900 dark:text-white">
+                  {invoice || "Auto-generated"}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-2">Payable Amount (BDT)</label>
+                <div className="relative">
+                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-surface-400">৳</span>
+                  <input 
+                    type="number" 
+                    value={amount} 
+                    onChange={(e) => setAmount(e.target.value)} 
+                    className="w-full bg-surface-50 dark:bg-surface-800 border-2 border-surface-100 dark:border-surface-800 rounded-[1.5rem] py-5 pl-12 pr-6 text-3xl font-black text-surface-900 dark:text-white focus:border-bkash focus:ring-0 transition-all" 
+                  />
+                </div>
               </div>
             </div>
-            <button 
-              onClick={handleCheckout} 
-              disabled={isProcessing || !isOnline} 
-              className={cn(
-                "w-full font-bold py-4 md:py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 text-base md:text-lg",
-                isOnline 
-                  ? "bg-bkash hover:bg-bkash/90 text-white shadow-bkash/20" 
-                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
-              )}
-            >
-              {isProcessing ? <Loader2 className="animate-spin" /> : (
-                isOnline ? <>Pay with bKash <ExternalLink size={20} /></> : <>Offline: Connect to Pay <ShieldCheck size={20} /></>
-              )}
-            </button>
+
+            <div className="space-y-4">
+              <button 
+                onClick={handleCheckout} 
+                disabled={isProcessing || !isOnline} 
+                className={cn(
+                  "w-full font-black py-5 rounded-[1.5rem] shadow-xl transition-all flex items-center justify-center gap-3 text-lg",
+                  isOnline 
+                    ? "bg-bkash hover:bg-bkash-dark text-white shadow-bkash/25" 
+                    : "bg-surface-200 dark:bg-surface-800 text-surface-400 cursor-not-allowed"
+                )}
+              >
+                {isProcessing ? <Loader2 className="animate-spin" /> : (
+                  isOnline ? <>Pay with bKash <ChevronRight size={20} /></> : <>Offline: Connect to Pay</>
+                )}
+              </button>
+
+              <div className="flex justify-center gap-4">
+                <Link to="/admin/login" className="text-[10px] font-black uppercase tracking-widest text-surface-400 hover:text-bkash transition-colors">Admin Login</Link>
+                <span className="text-surface-200 dark:text-surface-800">|</span>
+                <Link to="/generate" className="text-[10px] font-black uppercase tracking-widest text-surface-400 hover:text-bkash transition-colors">Create Link</Link>
+              </div>
+            </div>
 
             {showManualRedirect && (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-3"
+                className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-4"
               >
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
-                  <p className="text-sm text-amber-200/80">
-                    Redirect blocked by browser security. Please click the button below to open the payment page in a new tab.
+                  <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium leading-relaxed">
+                    Redirect blocked. Please click the button below to open the bKash payment page in a new tab.
                   </p>
                 </div>
                 <a 
                   href={bkashURL} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-amber-500/20"
                 >
-                  Open bKash Payment <ExternalLink size={16} />
+                  Open Payment Page <ExternalLink size={16} />
                 </a>
               </motion.div>
             )}
+          </div>
+
+          <div className="bg-surface-50 dark:bg-surface-800/50 p-6 text-center border-t border-surface-100 dark:border-surface-800">
+            <p className="text-[10px] font-black uppercase tracking-widest text-surface-400">Powered by bKash Enterprise</p>
           </div>
         </div>
       </motion.div>
@@ -674,11 +708,11 @@ const PaymentLinkGenerator = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl">
-        <div className="bg-bkash-dark border border-bkash-dark rounded-[2.5rem] overflow-hidden shadow-2xl">
+        <div className="bg-surface-900 border border-surface-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="bg-bkash p-8 text-white">
             <div className="flex items-center gap-4 mb-2">
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2">
-                <Zap className="text-bkash" size={28} />
+              <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center p-2">
+                <Zap className="text-white" size={28} />
               </div>
               <h2 className="text-2xl font-black tracking-tight">Payment Link Generator</h2>
             </div>
@@ -688,37 +722,37 @@ const PaymentLinkGenerator = () => {
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Amount (BDT)</label>
+                <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Amount (BDT)</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-zinc-500">৳</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-surface-500">৳</span>
                   <input 
                     type="number" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-black border border-zinc-800 rounded-2xl py-4 pl-10 pr-4 text-xl font-bold text-white focus:border-bkash focus:outline-none transition-all"
+                    className="w-full bg-surface-950 border border-surface-800 rounded-2xl py-4 pl-10 pr-4 text-xl font-bold text-white focus:border-bkash focus:outline-none transition-all"
                     placeholder="0.00"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Invoice (Optional)</label>
+                <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Invoice (Optional)</label>
                 <input 
                   type="text" 
                   value={invoice}
                   onChange={(e) => setInvoice(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
+                  className="w-full bg-surface-950 border border-surface-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
                   placeholder="Auto-generated if empty"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Merchant ID (Optional)</label>
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Merchant ID (Optional)</label>
               <input 
                 type="text" 
                 value={merchantId}
                 onChange={(e) => setMerchantId(e.target.value)}
-                className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
+                className="w-full bg-surface-950 border border-surface-800 rounded-2xl py-4 px-4 text-sm font-medium text-white focus:border-bkash focus:outline-none transition-all"
                 placeholder="Leave empty for Global API"
               />
             </div>
@@ -786,85 +820,82 @@ const SuccessPage = () => {
   }) : 'N/A';
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }} 
-      animate={{ opacity: 1, scale: 1 }} 
-      className="max-w-lg mx-auto pt-8"
-    >
-      <div className="bg-bkash-dark border border-bkash-dark rounded-[2rem] overflow-hidden shadow-2xl shadow-bkash/10">
-        <div className="bg-bkash p-6 md:p-10 text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-black/10" />
-          <motion.div 
-            initial={{ scale: 0 }} 
-            animate={{ scale: 1 }} 
-            transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
-            className="relative z-10 w-16 h-16 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl"
-          >
-            <CheckCircle2 size={40} className="text-bkash" />
-          </motion.div>
-          <h2 className="relative z-10 text-xl md:text-2xl font-black text-white">Payment Successful</h2>
-        </div>
-        
-        <div className="p-6 md:p-12 space-y-6 md:space-y-8">
-          <div className="text-center">
-            <p className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-2">Amount Paid</p>
-            <h3 className="text-3xl md:text-5xl font-black text-white">
-              <span className="text-bkash mr-2">৳</span>
-              {parseFloat(amount || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </h3>
-          </div>
-
-          <div className="space-y-4 pt-4 border-t border-bkash-dark">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
-              <span className="text-zinc-500 font-medium text-sm">Transaction ID</span>
-              <span className="font-mono font-bold text-zinc-200 text-sm break-all">{trxID}</span>
-            </div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
-              <span className="text-zinc-500 font-medium text-sm">Date & Time</span>
-              <span className="font-bold text-zinc-200 text-sm">{formattedTime}</span>
-            </div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
-              <span className="text-zinc-500 font-medium text-sm">Customer</span>
-              <span className="font-bold text-zinc-200 text-sm">
-                {customer ? `Customer ${customer.slice(-4)}` : 'N/A'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Invoice No</span>
-              <span className="font-bold text-zinc-200">{invoice || 'N/A'}</span>
-            </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Payment Method</span>
-              <span className="font-bold text-zinc-200">bKash Wallet</span>
-            </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-500 font-medium">Status</span>
-              <span className="text-[#00C853] font-black uppercase tracking-wider text-sm">Completed</span>
-            </div>
-          </div>
-
-          <div className="pt-6 flex gap-4">
-            <Link 
-              to="/" 
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        className="w-full max-w-lg"
+      >
+        <div className="bg-white dark:bg-surface-900 rounded-[3rem] overflow-hidden shadow-2xl border border-surface-100 dark:border-surface-800">
+          <div className="bg-bkash p-10 text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-black/10" />
+            <motion.div 
+              initial={{ scale: 0 }} 
+              animate={{ scale: 1 }} 
+              transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
+              className="relative z-10 w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl"
             >
-              <ArrowLeft size={18} /> Pay Again
-            </Link>
-            <button 
-              onClick={() => generateReceipt({ trxID, amount, customer, invoice, time })}
-              className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 text-white shadow-lg shadow-bkash/20"
-            >
-              <Download size={18} /> Receipt
-            </button>
+              <CheckCircle2 size={40} className="text-bkash" />
+            </motion.div>
+            <h2 className="relative z-10 text-2xl font-black text-white tracking-tighter">Payment Successful</h2>
+          </div>
+          
+          <div className="p-8 md:p-12 space-y-8">
+            <div className="text-center">
+              <p className="text-surface-400 text-xs font-black uppercase tracking-widest mb-2">Amount Paid</p>
+              <h3 className="text-5xl font-black text-surface-900 dark:text-white">
+                <span className="text-bkash mr-2">৳</span>
+                {parseFloat(amount || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </h3>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-surface-100 dark:border-surface-800">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+                <span className="text-surface-500 font-bold text-xs uppercase tracking-widest">Transaction ID</span>
+                <span className="font-mono font-bold text-surface-900 dark:text-white text-sm break-all">{trxID}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+                <span className="text-surface-500 font-bold text-xs uppercase tracking-widest">Date & Time</span>
+                <span className="font-bold text-surface-900 dark:text-white text-sm">{formattedTime}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-1 gap-1">
+                <span className="text-surface-500 font-bold text-xs uppercase tracking-widest">Customer</span>
+                <span className="font-bold text-surface-900 dark:text-white text-sm">
+                  {customer ? `Customer ${customer.slice(-4)}` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-surface-500 font-bold text-xs uppercase tracking-widest">Invoice No</span>
+                <span className="font-bold text-surface-900 dark:text-white">{invoice || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-surface-500 font-bold text-xs uppercase tracking-widest">Status</span>
+                <span className="text-emerald-500 font-black uppercase tracking-wider text-sm">Completed</span>
+              </div>
+            </div>
+
+            <div className="pt-6 flex flex-col sm:flex-row gap-4">
+              <Link 
+                to="/" 
+                className="flex-1 btn-secondary py-5 flex items-center justify-center gap-2"
+              >
+                <ArrowLeft size={18} /> Pay Again
+              </Link>
+              <button 
+                onClick={() => generateReceipt({ trxID, amount, customer, invoice, time })}
+                className="flex-1 btn-primary py-5 flex items-center justify-center gap-2"
+              >
+                <Download size={18} /> Receipt
+              </button>
+            </div>
+          </div>
+          
+          <div className="bg-surface-50 dark:bg-surface-950 p-6 text-center border-t border-surface-100 dark:border-surface-800">
+            <p className="text-surface-400 text-[10px] font-black uppercase tracking-[0.2em]">Thank you for using bKash</p>
           </div>
         </div>
-        
-        <div className="bg-zinc-950 p-6 text-center border-t border-zinc-800">
-          <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-[0.2em]">Thank you for your payment</p>
-          <p className="text-zinc-700 text-[9px] mt-1">Receipt generated: {new Date().toLocaleString()}</p>
-        </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 };
 
@@ -873,30 +904,48 @@ const FailurePage = () => {
   const error = searchParams.get("error") || searchParams.get("status");
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md mx-auto text-center space-y-8 pt-12">
-      <div className="bg-bkash/10 border border-bkash/20 p-6 rounded-full inline-block">
-        <XCircle size={80} className="text-bkash" />
-      </div>
-      <div>
-        <h2 className="text-4xl font-black mb-2">Payment Failed</h2>
-        <p className="text-zinc-400">We couldn't process your payment at this time.</p>
-      </div>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex items-center gap-4 text-left">
-        <AlertCircle className="text-bkash shrink-0" />
-        <div>
-          <p className="text-xs text-zinc-500 uppercase font-bold">Error Details</p>
-          <p className="text-zinc-300">{error || "Unknown error occurred"}</p>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        className="w-full max-w-md text-center"
+      >
+        <div className="bg-white dark:bg-surface-900 rounded-[3rem] p-10 shadow-2xl border border-surface-100 dark:border-surface-800 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-rose-500" />
+          
+          <div className="w-24 h-24 bg-rose-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 relative">
+            <XCircle className="text-rose-500 relative z-10" size={48} />
+          </div>
+
+          <h2 className="text-3xl font-black tracking-tighter text-surface-900 dark:text-white mb-2">Payment Failed</h2>
+          <p className="text-surface-500 font-medium mb-8">We couldn't process your transaction at this time.</p>
+
+          <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-6 mb-8 flex items-start gap-4 text-left">
+            <AlertCircle className="text-rose-500 shrink-0 mt-0.5" size={18} />
+            <div>
+              <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Error Details</p>
+              <p className="text-sm text-rose-600/80 dark:text-rose-400/80 font-medium">{error || "The payment was cancelled or declined by the user."}</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <Link 
+              to="/checkout" 
+              className="block w-full btn-primary py-5"
+            >
+              Try Again
+            </Link>
+            <Link 
+              to="/" 
+              className="block w-full btn-secondary py-5"
+            >
+              Cancel
+            </Link>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Link to="/checkout" className="flex-1 bg-bkash hover:bg-bkash/90 py-4 rounded-xl font-bold transition-colors text-center">
-          Try Again
-        </Link>
-        <Link to="/" className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-xl font-bold transition-colors text-center">
-          Cancel
-        </Link>
-      </div>
-    </motion.div>
+        <p className="mt-8 text-[10px] font-black uppercase tracking-widest text-surface-400">Powered by bKash Enterprise</p>
+      </motion.div>
+    </div>
   );
 };
 
@@ -1054,44 +1103,49 @@ const Transactions = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       {/* Filters */}
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-5 md:p-6 backdrop-blur-sm">
-        <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-          <Search size={20} className="text-bkash" />
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-5 md:p-8 shadow-sm">
+        <h3 className="font-black text-xl tracking-tighter mb-8 flex items-center gap-3">
+          <div className="p-2 bg-bkash/10 rounded-xl">
+            <Filter size={20} className="text-bkash" />
+          </div>
           Filter Payments
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
           <div className="space-y-2">
-            <label className="text-xs text-zinc-500 uppercase font-bold">Start Date</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">Start Date</label>
             <input 
               type="date" 
               value={filters.start_date}
               onChange={(e) => setFilters(prev => ({ ...prev, start_date: e.target.value }))}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50"
+              className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/20"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs text-zinc-500 uppercase font-bold">End Date</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">End Date</label>
             <input 
               type="date" 
               value={filters.end_date}
               onChange={(e) => setFilters(prev => ({ ...prev, end_date: e.target.value }))}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50"
+              className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/20"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs text-zinc-500 uppercase font-bold">Search</label>
-            <input 
-              type="text" 
-              placeholder="TrxID, Invoice, Customer"
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50"
-            />
+            <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">Search</label>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="TrxID, Invoice, Customer"
+                value={filters.search}
+                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/20"
+              />
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button 
               onClick={fetchTransactions}
-              className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-bold py-2 rounded-xl transition-all text-sm"
+              className="flex-1 bg-bkash hover:bg-bkash-dark text-white font-black py-3 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg shadow-bkash/20"
             >
               Filter
             </button>
@@ -1100,13 +1154,13 @@ const Transactions = () => {
                 setFilters({ start_date: "", end_date: "", search: "" });
                 setTimeout(fetchTransactions, 0);
               }}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded-xl transition-all text-sm"
+              className="flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-600 dark:text-surface-300 font-black py-3 rounded-xl transition-all text-xs uppercase tracking-widest"
             >
               Reset
             </button>
             <button 
               onClick={handleExport}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-bkash rounded-xl transition-all shrink-0"
+              className="p-3 bg-surface-100 dark:bg-surface-800 hover:bg-bkash hover:text-white text-surface-400 rounded-xl transition-all shrink-0"
               title="Export CSV"
             >
               <Download size={20} />
@@ -1116,50 +1170,50 @@ const Transactions = () => {
       </div>
 
       {/* List */}
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-5 md:p-6 border-b border-bkash-dark flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h3 className="font-bold text-lg">Transaction List</h3>
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2rem] overflow-hidden shadow-sm">
+        <div className="p-8 border-b border-surface-100 dark:border-surface-800 flex flex-col sm:row justify-between items-start sm:items-center gap-6">
+          <h3 className="font-black text-2xl tracking-tighter">Transaction List</h3>
           <div className="text-left sm:text-right">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Total Volume</p>
-            <p className="text-xl font-black text-bkash">{formatCurrency(totalAmount)}</p>
+            <p className="text-[10px] text-surface-400 uppercase font-black tracking-widest mb-1">Total Volume</p>
+            <p className="text-3xl font-black text-bkash tracking-tighter">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[800px]">
-            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-surface-50 dark:bg-surface-950 text-surface-400 text-[10px] uppercase tracking-widest font-black">
               <tr>
-                <th className="py-4 px-6 font-black">Date / Time</th>
-                <th className="py-4 px-6 font-black">Transaction ID</th>
-                <th className="py-4 px-6 font-black">Amount</th>
-                <th className="py-4 px-6 font-black">Customer</th>
-                <th className="py-4 px-6 font-black">Status</th>
-                <th className="py-4 px-6 font-black text-right">Actions</th>
+                <th className="py-5 px-8">Date / Time</th>
+                <th className="py-5 px-8">Transaction ID</th>
+                <th className="py-5 px-8">Amount</th>
+                <th className="py-5 px-8">Customer</th>
+                <th className="py-5 px-8">Status</th>
+                <th className="py-5 px-8 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
               {loading ? (
-                <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="animate-spin inline-block mr-2" /> Loading...</td></tr>
+                <tr><td colSpan={6} className="py-20 text-center"><Loader2 className="animate-spin inline-block mr-2 text-bkash" /> <span className="text-surface-400 font-bold uppercase tracking-widest text-xs">Loading records...</span></td></tr>
               ) : transactions.map((tx) => (
-                <tr key={tx.id} className="group border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
-                  <td className="py-4 px-6 text-sm text-zinc-400">{new Date(tx.created_at).toLocaleString()}</td>
-                  <td className="py-4 px-6 font-bold text-sm">{tx.trx_id || "PENDING"}</td>
-                  <td className="py-4 px-6 font-bold text-sm text-bkash">{formatCurrency(tx.amount)}</td>
-                  <td className="py-4 px-6 text-sm text-zinc-300">{tx.customer_msisdn || "N/A"}</td>
-                  <td className="py-4 px-6">
+                <tr key={tx.id} className="group hover:bg-surface-50 dark:hover:bg-surface-950 transition-colors">
+                  <td className="py-5 px-8 text-sm text-surface-500 font-medium">{new Date(tx.created_at).toLocaleString()}</td>
+                  <td className="py-5 px-8 font-bold text-sm tracking-tight">{tx.trx_id || "PENDING"}</td>
+                  <td className="py-5 px-8 font-black text-sm text-bkash">{formatCurrency(tx.amount)}</td>
+                  <td className="py-5 px-8 text-sm text-surface-600 dark:text-surface-400 font-medium">{tx.customer_msisdn || "N/A"}</td>
+                  <td className="py-5 px-8">
                     <span className={cn(
-                      "px-2 py-1 rounded-full text-[10px] font-bold uppercase",
-                      tx.status === 'completed' ? "bg-bkash/10 text-bkash" : 
+                      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : 
                       tx.status === 'refunded' ? "bg-rose-500/10 text-rose-500" :
-                      "bg-zinc-500/10 text-zinc-500"
+                      "bg-surface-100 dark:bg-surface-800 text-surface-400"
                     )}>
                       {tx.status}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex justify-end gap-2">
+                  <td className="py-5 px-8 text-right">
+                    <div className="flex justify-end gap-3">
                       <button 
                         onClick={() => setSelectedTx(tx)}
-                        className="p-2 text-zinc-400 hover:text-white transition-colors"
+                        className="p-2 text-surface-400 hover:text-bkash hover:bg-bkash/5 rounded-lg transition-all"
                         title="View Details"
                       >
                         <Info size={18} />
@@ -1167,7 +1221,7 @@ const Transactions = () => {
                       {tx.status === 'completed' && (
                         <Link 
                           to={`/admin/refunds?trx_id=${tx.trx_id}`}
-                          className="p-2 text-zinc-400 hover:text-bkash transition-colors"
+                          className="p-2 text-surface-400 hover:text-bkash hover:bg-bkash/5 rounded-lg transition-all"
                           title="Refund"
                         >
                           <RotateCcw size={18} />
@@ -1178,7 +1232,7 @@ const Transactions = () => {
                 </tr>
               ))}
               {!loading && transactions.length === 0 && (
-                <tr><td colSpan={6} className="py-12 text-center text-zinc-500">No transactions found</td></tr>
+                <tr><td colSpan={6} className="py-20 text-center text-surface-400 font-bold uppercase tracking-widest text-xs">No transactions found</td></tr>
               )}
             </tbody>
           </table>
@@ -1190,45 +1244,56 @@ const Transactions = () => {
         {selectedTx && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTx(null)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
-              <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-                <h3 className="font-bold text-xl">Transaction Details</h3>
-                <button onClick={() => setSelectedTx(null)} className="p-2 text-zinc-400 hover:text-white"><X size={20} /></button>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-lg bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
+              <div className="p-8 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50 dark:bg-surface-950">
+                <h3 className="font-black text-2xl tracking-tighter">Transaction Details</h3>
+                <button onClick={() => setSelectedTx(null)} className="p-2 text-surface-400 hover:text-bkash transition-colors"><X size={24} /></button>
               </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Transaction ID</p>
-                    <p className="font-bold text-bkash">{selectedTx.trx_id || "N/A"}</p>
+              <div className="p-8 space-y-8">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-surface-400 uppercase font-black tracking-widest">Transaction ID</p>
+                    <p className="font-bold text-surface-900 dark:text-white">{selectedTx.trx_id || "PENDING"}</p>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Payment ID</p>
-                    <p className="text-sm font-mono">{selectedTx.payment_id}</p>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-surface-400 uppercase font-black tracking-widest">Status</p>
+                    <span className={cn(
+                      "inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      selectedTx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-surface-100 dark:bg-surface-800 text-surface-400"
+                    )}>
+                      {selectedTx.status}
+                    </span>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Amount</p>
-                    <p className="text-lg font-black">{formatCurrency(selectedTx.amount)}</p>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-surface-400 uppercase font-black tracking-widest">Amount</p>
+                    <p className="text-2xl font-black text-bkash tracking-tighter">{formatCurrency(selectedTx.amount)}</p>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Status</p>
-                    <span className="bg-bkash/10 text-bkash px-2 py-1 rounded-md text-[10px] font-bold uppercase">{selectedTx.status}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Customer</p>
-                    <p className="text-sm">{selectedTx.customer_msisdn || "N/A"}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-zinc-500 uppercase font-bold">Invoice</p>
-                    <p className="text-sm">{selectedTx.merchant_invoice || "N/A"}</p>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-surface-400 uppercase font-black tracking-widest">Date</p>
+                    <p className="text-sm font-bold text-surface-700 dark:text-surface-300">{new Date(selectedTx.created_at).toLocaleString()}</p>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-zinc-500 uppercase font-bold">Date / Time</p>
-                  <p className="text-sm">{new Date(selectedTx.created_at).toLocaleString()}</p>
+                <div className="p-6 bg-surface-50 dark:bg-surface-950 rounded-3xl border border-surface-100 dark:border-surface-800 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-surface-400 font-bold uppercase tracking-widest">Customer</span>
+                    <span className="font-bold text-surface-900 dark:text-white">{selectedTx.customer_msisdn || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-surface-400 font-bold uppercase tracking-widest">Invoice</span>
+                    <span className="font-bold text-surface-900 dark:text-white">{selectedTx.merchant_invoice || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-surface-400 font-bold uppercase tracking-widest">Payment ID</span>
+                    <span className="text-xs font-mono text-surface-500">{selectedTx.payment_id}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="p-6 bg-zinc-950 border-t border-zinc-800 flex justify-end">
-                <button onClick={() => setSelectedTx(null)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors">Close</button>
+
+                <button 
+                  onClick={() => setSelectedTx(null)}
+                  className="w-full bg-surface-900 dark:bg-white text-white dark:text-surface-900 font-black py-4 rounded-2xl transition-all hover:opacity-90 uppercase tracking-widest text-xs"
+                >
+                  Close Details
+                </button>
               </div>
             </motion.div>
           </div>
@@ -1251,28 +1316,28 @@ const LogsPage = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-          <h3 className="font-bold text-lg flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center">
+          <h3 className="font-bold text-lg flex items-center gap-2 text-surface-900 dark:text-white">
             <Terminal size={20} className="text-bkash" />
             System Debug Logs
           </h3>
-          <button onClick={() => window.location.reload()} className="text-xs text-zinc-500 hover:text-white transition-colors">Refresh</button>
+          <button onClick={() => window.location.reload()} className="text-xs text-surface-500 hover:text-bkash transition-colors">Refresh</button>
         </div>
-        <div className="p-4 bg-black/50 font-mono text-xs space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
+        <div className="p-4 bg-surface-50 dark:bg-black/50 font-mono text-xs space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
           {loading ? (
-            <div className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></div>
+            <div className="py-12 text-center"><Loader2 className="animate-spin inline-block text-bkash" /></div>
           ) : logs.length === 0 ? (
-            <div className="py-12 text-center text-zinc-600">No logs found</div>
+            <div className="py-12 text-center text-surface-500">No logs found</div>
           ) : logs.map((log, i) => (
-            <div key={i} className="border-b border-zinc-800/50 pb-2 last:border-0">
-              <div className="flex gap-4 text-zinc-500 mb-1">
+            <div key={i} className="border-b border-surface-100 dark:border-surface-800/50 pb-2 last:border-0">
+              <div className="flex gap-4 text-surface-500 mb-1">
                 <span className="text-bkash font-bold">[{log.level || 'INFO'}]</span>
                 <span>{new Date(log.created_at).toLocaleString()}</span>
               </div>
-              <p className="text-zinc-300">{log.message}</p>
+              <p className="text-surface-700 dark:text-surface-300">{log.message}</p>
               {log.details && (
-                <pre className="mt-1 text-[10px] text-zinc-600 overflow-x-auto">
+                <pre className="mt-1 text-[10px] text-surface-500 overflow-x-auto">
                   {log.details}
                 </pre>
               )}
@@ -1297,16 +1362,16 @@ const AuditLogsPage = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-zinc-800">
-          <h3 className="font-bold text-lg flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-surface-100 dark:border-surface-800">
+          <h3 className="font-bold text-lg flex items-center gap-2 text-surface-900 dark:text-white">
             <Activity size={20} className="text-bkash" />
             Security Audit Trail
           </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-zinc-800/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-surface-50 dark:bg-surface-950 text-surface-500 text-[10px] uppercase tracking-widest">
               <tr>
                 <th className="py-4 px-6 font-black">Timestamp</th>
                 <th className="py-4 px-6 font-black">Action</th>
@@ -1316,17 +1381,17 @@ const AuditLogsPage = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></td></tr>
+                <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="animate-spin inline-block text-bkash" /></td></tr>
               ) : logs.map((log, i) => (
-                <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
-                  <td className="py-4 px-6 text-xs text-zinc-500">{new Date(log.created_at).toLocaleString()}</td>
+                <tr key={i} className="border-b border-surface-100 dark:border-surface-800/50 hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors">
+                  <td className="py-4 px-6 text-xs text-surface-500">{new Date(log.created_at).toLocaleString()}</td>
                   <td className="py-4 px-6"><span className="px-2 py-1 bg-bkash/10 text-bkash rounded text-[10px] font-bold uppercase">{log.action}</span></td>
-                  <td className="py-4 px-6 text-sm font-medium">{log.user}</td>
-                  <td className="py-4 px-6 text-xs text-zinc-400">{log.details}</td>
+                  <td className="py-4 px-6 text-sm font-medium text-surface-900 dark:text-white">{log.user}</td>
+                  <td className="py-4 px-6 text-xs text-surface-500 dark:text-surface-400">{log.details}</td>
                 </tr>
               ))}
               {!loading && logs.length === 0 && (
-                <tr><td colSpan={4} className="py-12 text-center text-zinc-600">No audit logs recorded</td></tr>
+                <tr><td colSpan={4} className="py-12 text-center text-surface-500">No audit logs recorded</td></tr>
               )}
             </tbody>
           </table>
@@ -1444,13 +1509,13 @@ const SettingsPage = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
-        <div className="bg-zinc-800/50 p-8 border-b border-zinc-800">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="bg-surface-50 dark:bg-surface-950 p-8 border-b border-surface-100 dark:border-surface-800">
           <h3 className="text-2xl font-bold flex items-center gap-3">
             <Settings className="text-bkash" />
             System Configuration
           </h3>
-          <p className="text-zinc-500 mt-1 font-medium">Manage your bKash API credentials and application settings.</p>
+          <p className="text-sm text-surface-500 mt-1 font-medium">Manage your bKash API credentials and application settings.</p>
         </div>
         
         <form onSubmit={handleSave} className="p-8 space-y-8">
@@ -1460,39 +1525,39 @@ const SettingsPage = () => {
                 <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">API Credentials</h4>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">App Key</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">App Key</label>
                     <input 
                       type="password" 
                       value={settings.BKASH_APP_KEY}
                       onChange={(e) => setSettings({...settings, BKASH_APP_KEY: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">App Secret</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">App Secret</label>
                     <input 
                       type="password" 
                       value={settings.BKASH_APP_SECRET}
                       onChange={(e) => setSettings({...settings, BKASH_APP_SECRET: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Username</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Username</label>
                     <input 
                       type="text" 
                       value={settings.BKASH_USERNAME}
                       onChange={(e) => setSettings({...settings, BKASH_USERNAME: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Password</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Password</label>
                     <input 
                       type="password" 
                       value={settings.BKASH_PASSWORD}
                       onChange={(e) => setSettings({...settings, BKASH_PASSWORD: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                 </div>
@@ -1502,21 +1567,21 @@ const SettingsPage = () => {
                 <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Environment Settings</h4>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">bKash Base URL</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">bKash Base URL</label>
                     <input 
                       type="text" 
                       value={settings.BKASH_BASE_URL}
                       onChange={(e) => setSettings({...settings, BKASH_BASE_URL: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Application URL</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Application URL</label>
                     <input 
                       type="text" 
                       value={settings.APP_URL}
                       onChange={(e) => setSettings({...settings, APP_URL: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                 </div>
@@ -1524,8 +1589,8 @@ const SettingsPage = () => {
             </div>
           ) : (
             <div className="space-y-8">
-              <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
-                <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+              <div className="bg-surface-50 dark:bg-surface-950 p-6 rounded-2xl border border-surface-100 dark:border-surface-800">
+                <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
                   <CreditCard className="text-bkash" size={18} />
                   Payment Gateway Selection
                 </h4>
@@ -1537,14 +1602,14 @@ const SettingsPage = () => {
                       "p-6 rounded-2xl border text-left transition-all",
                       merchantSettings?.payment_mode === 'GLOBAL' 
                         ? "bg-bkash/10 border-bkash ring-1 ring-bkash" 
-                        : "bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800"
+                        : "bg-white dark:bg-surface-900 border-surface-200 dark:border-surface-800 hover:border-bkash/30"
                     )}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="font-bold">Option 1: Global API</span>
+                      <span className="font-bold text-surface-900 dark:text-white">Option 1: Global API</span>
                       {merchantSettings?.payment_mode === 'GLOBAL' && <CheckCircle2 className="text-bkash" size={20} />}
                     </div>
-                    <p className="text-xs text-zinc-400 leading-relaxed">Use the platform's shared bKash credentials. Ideal if you don't have your own bKash merchant API access yet.</p>
+                    <p className="text-xs text-surface-500 leading-relaxed">Use the platform's shared bKash credentials. Ideal if you don't have your own bKash merchant API access yet.</p>
                   </button>
 
                   <button 
@@ -1554,14 +1619,14 @@ const SettingsPage = () => {
                       "p-6 rounded-2xl border text-left transition-all",
                       merchantSettings?.payment_mode === 'OWN' 
                         ? "bg-bkash/10 border-bkash ring-1 ring-bkash" 
-                        : "bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800"
+                        : "bg-white dark:bg-surface-900 border-surface-200 dark:border-surface-800 hover:border-bkash/30"
                     )}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="font-bold">Option 2: Own Credentials</span>
+                      <span className="font-bold text-surface-900 dark:text-white">Option 2: Own Credentials</span>
                       {merchantSettings?.payment_mode === 'OWN' && <CheckCircle2 className="text-bkash" size={20} />}
                     </div>
-                    <p className="text-xs text-zinc-400 leading-relaxed">Use your own bKash App Key, Secret, and credentials. You keep full control over your bKash account.</p>
+                    <p className="text-xs text-surface-500 leading-relaxed">Use your own bKash App Key, Secret, and credentials. You keep full control over your bKash account.</p>
                   </button>
                 </div>
               </div>
@@ -1574,44 +1639,44 @@ const SettingsPage = () => {
                 >
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-400">Your App Key</label>
+                      <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Your App Key</label>
                       <input 
                         type="password" 
                         value={merchantSettings.bkash_app_key || ""}
                         onChange={(e) => setMerchantSettings({...merchantSettings, bkash_app_key: e.target.value})}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        className="input-field py-3"
                         placeholder="Enter your bKash App Key"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-400">Your App Secret</label>
+                      <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Your App Secret</label>
                       <input 
                         type="password" 
                         value={merchantSettings.bkash_app_secret || ""}
                         onChange={(e) => setMerchantSettings({...merchantSettings, bkash_app_secret: e.target.value})}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        className="input-field py-3"
                         placeholder="Enter your bKash App Secret"
                       />
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-400">Your bKash Username</label>
+                      <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Your bKash Username</label>
                       <input 
                         type="text" 
                         value={merchantSettings.bkash_username || ""}
                         onChange={(e) => setMerchantSettings({...merchantSettings, bkash_username: e.target.value})}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        className="input-field py-3"
                         placeholder="01XXXXXXXXX"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-400">Your bKash Password</label>
+                      <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Your bKash Password</label>
                       <input 
                         type="password" 
                         value={merchantSettings.bkash_password || ""}
                         onChange={(e) => setMerchantSettings({...merchantSettings, bkash_password: e.target.value})}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                        className="input-field py-3"
                         placeholder="••••••••"
                       />
                     </div>
@@ -1619,8 +1684,8 @@ const SettingsPage = () => {
                 </motion.div>
               )}
 
-              <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
-                <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+              <div className="bg-surface-50 dark:bg-surface-950 p-6 rounded-2xl border border-surface-100 dark:border-surface-800">
+                <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
                   <Key className="text-bkash" size={18} />
                   Your API Key
                 </h4>
@@ -1629,7 +1694,7 @@ const SettingsPage = () => {
                     type="text" 
                     readOnly
                     value={merchantSettings?.api_key || ""}
-                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm font-mono text-zinc-400"
+                    className="flex-1 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl px-4 py-3 text-sm font-mono text-surface-500 dark:text-surface-400"
                   />
                   <button 
                     type="button"
@@ -1637,12 +1702,12 @@ const SettingsPage = () => {
                       navigator.clipboard.writeText(merchantSettings?.api_key || "");
                       toast.success("API Key copied to clipboard");
                     }}
-                    className="px-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                    className="px-4 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 rounded-xl transition-all text-surface-600 dark:text-surface-300"
                   >
                     <Copy size={18} />
                   </button>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-3">Use this key to integrate bKash payments into your own website or application.</p>
+                <p className="text-[10px] text-surface-400 mt-3">Use this key to integrate bKash payments into your own website or application.</p>
               </div>
             </div>
           )}
@@ -1860,8 +1925,8 @@ const Refunds = () => {
         {/* Left Column: Process Refund & Search */}
         <div className="space-y-6">
           {/* Search Transaction Card */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 md:p-6 backdrop-blur-sm">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-5 md:p-6 shadow-sm">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
               <Search size={20} className="text-bkash" />
               Search Transaction
             </h3>
@@ -1871,12 +1936,12 @@ const Refunds = () => {
                 placeholder="Enter Transaction ID (e.g. TST...)" 
                 value={searchTrxId}
                 onChange={(e) => setSearchTrxId(e.target.value)}
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/50"
+                className="input-field py-2.5"
               />
               <button 
                 type="submit" 
                 disabled={isSearching}
-                className="bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="bg-bkash hover:bg-bkash-dark disabled:bg-surface-200 dark:disabled:bg-surface-800 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
                 Search
@@ -1884,27 +1949,27 @@ const Refunds = () => {
             </form>
 
             {foundTx && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-6 p-5 bg-zinc-950/50 rounded-2xl border border-zinc-800 space-y-4">
-                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Transaction Details</h4>
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-6 p-5 bg-surface-50 dark:bg-surface-950 rounded-2xl border border-surface-100 dark:border-surface-800 space-y-4">
+                <h4 className="text-xs text-surface-500 uppercase font-black tracking-widest">Transaction Details</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Transaction ID</p>
-                    <p className="font-bold text-sm">{foundTx.trx_id}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">Transaction ID</p>
+                    <p className="font-bold text-sm text-surface-900 dark:text-white">{foundTx.trx_id}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Amount</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">Amount</p>
                     <p className="font-black text-bkash">{formatCurrency(foundTx.amount)}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Customer</p>
-                    <p className="text-sm">{foundTx.customer_msisdn || "N/A"}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">Customer</p>
+                    <p className="text-sm text-surface-700 dark:text-surface-300">{foundTx.customer_msisdn || "N/A"}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Date</p>
-                    <p className="text-xs text-zinc-400">{new Date(foundTx.created_at).toLocaleString()}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">Date</p>
+                    <p className="text-xs text-surface-500">{new Date(foundTx.created_at).toLocaleString()}</p>
                   </div>
                   <div className="space-y-1 col-span-2">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Payment Mode</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">Payment Mode</p>
                     <span className={cn(
                       "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest",
                       foundTx.payment_mode === 'OWN' ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"
@@ -1916,7 +1981,7 @@ const Refunds = () => {
                 {localStorage.getItem("userRole") === 'admin' && foundTx.merchant_id && (
                   <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={16} />
-                    <p className="text-[10px] text-rose-200/80 leading-relaxed">
+                    <p className="text-[10px] text-rose-600 dark:text-rose-200/80 leading-relaxed">
                       <strong>Refund Restricted:</strong> Super Admin cannot process refunds for transactions belonging to merchants. Merchants must handle their own refunds.
                     </p>
                   </div>
@@ -1924,7 +1989,7 @@ const Refunds = () => {
                 {localStorage.getItem("userRole") === 'merchant' && foundTx.payment_mode === 'OWN' && (
                   <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
-                    <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                    <p className="text-[10px] text-amber-600 dark:text-amber-200/80 leading-relaxed">
                       <strong>Refund Restricted:</strong> This transaction was processed using your own bKash credentials. Refunds must be handled directly through your bKash merchant panel.
                     </p>
                   </div>
@@ -1935,43 +2000,43 @@ const Refunds = () => {
 
           {/* Process Refund Form Card */}
           <div className={cn(
-            "bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 md:p-6 backdrop-blur-sm transition-opacity duration-300",
+            "bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-5 md:p-6 shadow-sm transition-opacity duration-300",
             !foundTx && "opacity-50 pointer-events-none"
           )}>
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
               <RotateCcw size={20} className="text-rose-500" />
               Process Refund
             </h3>
             <form onSubmit={handleRefund} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs text-zinc-500 uppercase font-bold">Refund Amount <span className="text-rose-500">*</span></label>
+                  <label className="text-xs text-surface-500 uppercase font-bold">Refund Amount <span className="text-rose-500">*</span></label>
                   <input 
                     type="number" 
                     step="0.01"
                     required
                     value={refundForm.amount}
                     onChange={(e) => setRefundForm(prev => ({ ...prev, amount: e.target.value }))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                    className="input-field py-2.5 focus:ring-rose-500/50"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs text-zinc-500 uppercase font-bold">SKU (Optional)</label>
+                  <label className="text-xs text-surface-500 uppercase font-bold">SKU (Optional)</label>
                   <input 
                     type="text" 
                     value={refundForm.sku}
                     onChange={(e) => setRefundForm(prev => ({ ...prev, sku: e.target.value }))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                    className="input-field py-2.5 focus:ring-rose-500/50"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-zinc-500 uppercase font-bold">Reason (Optional)</label>
+                <label className="text-xs text-surface-500 uppercase font-bold">Reason (Optional)</label>
                 <textarea 
                   rows={3}
                   value={refundForm.reason}
                   onChange={(e) => setRefundForm(prev => ({ ...prev, reason: e.target.value }))}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50 resize-none"
+                  className="input-field py-2.5 focus:ring-rose-500/50 resize-none"
                   placeholder="e.g. Customer requested refund"
                 />
               </div>
@@ -1983,7 +2048,7 @@ const Refunds = () => {
                   (localStorage.getItem("userRole") === 'admin' && foundTx.merchant_id) ||
                   (localStorage.getItem("userRole") === 'merchant' && foundTx.payment_mode === 'OWN')
                 }
-                className="w-full bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-bkash hover:bg-bkash-dark disabled:bg-surface-200 dark:disabled:bg-surface-800 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
               >
                 {isProcessing ? <Loader2 className="animate-spin" /> : (
                   (localStorage.getItem("userRole") === 'admin' && foundTx?.merchant_id) || 
@@ -1997,16 +2062,16 @@ const Refunds = () => {
         </div>
 
         {/* Right Column: Recent Refunds Table */}
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl">
-          <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-            <h3 className="font-bold text-lg flex items-center gap-2">
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-surface-900 dark:text-white">
               <History size={20} className="text-bkash" />
               Recent Refund Requests
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
-              <thead className="bg-zinc-800/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+              <thead className="bg-surface-50 dark:bg-surface-950 text-surface-500 text-[10px] uppercase tracking-widest">
                 <tr>
                   <th className="py-4 px-4 font-black">Refund ID</th>
                   <th className="py-4 px-4 font-black">Amount</th>
@@ -2016,11 +2081,11 @@ const Refunds = () => {
               </thead>
               <tbody>
                 {refunds.map((ref) => (
-                  <tr key={ref.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group">
+                  <tr key={ref.id} className="border-b border-surface-100 dark:border-surface-800/50 hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors group">
                     <td className="py-4 px-4">
                       <div className="flex flex-col">
-                        <span className="text-white font-bold text-sm">{ref.refund_id}</span>
-                        <span className="text-zinc-500 text-[10px] font-mono">{ref.original_trx_id}</span>
+                        <span className="text-surface-900 dark:text-white font-bold text-sm">{ref.refund_id}</span>
+                        <span className="text-surface-400 text-[10px] font-mono">{ref.original_trx_id}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4">
@@ -2038,7 +2103,7 @@ const Refunds = () => {
                     <td className="py-4 px-4 text-right">
                       <button 
                         onClick={() => setSelectedRefund(ref)}
-                        className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-700 rounded-lg transition-all"
+                        className="p-2 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 rounded-lg transition-all text-surface-600 dark:text-surface-400"
                       >
                         <Info size={18} />
                       </button>
@@ -2076,7 +2141,7 @@ const Refunds = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 overflow-hidden"
+              className="relative bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 overflow-hidden"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
               
@@ -2086,31 +2151,31 @@ const Refunds = () => {
                   <AlertCircle size={40} className="text-rose-500 relative z-10" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-black text-white tracking-tight">Confirm Refund</h3>
-                  <p className="text-zinc-400 text-sm">
+                  <h3 className="text-2xl font-black text-surface-900 dark:text-white tracking-tight">Confirm Refund</h3>
+                  <p className="text-surface-500 dark:text-surface-400 text-sm">
                     You are about to initiate a refund for this transaction. This action is irreversible.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-zinc-950/50 rounded-2xl border border-zinc-800 p-5 space-y-4">
-                <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
-                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Refund Amount</span>
+              <div className="bg-surface-50 dark:bg-surface-950 rounded-2xl border border-surface-100 dark:border-surface-800 p-5 space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b border-surface-100 dark:border-surface-800">
+                  <span className="text-xs text-surface-500 font-bold uppercase tracking-wider">Refund Amount</span>
                   <span className="text-xl font-black text-rose-500">{formatCurrency(parseFloat(refundForm.amount) || 0)}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-left">
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">TrxID</p>
-                    <p className="text-xs font-mono text-white truncate">{foundTx?.trx_id}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">TrxID</p>
+                    <p className="text-xs font-mono text-surface-900 dark:text-white truncate">{foundTx?.trx_id}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">SKU</p>
-                    <p className="text-xs text-white truncate">{refundForm.sku || 'N/A'}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-bold">SKU</p>
+                    <p className="text-xs text-surface-900 dark:text-white truncate">{refundForm.sku || 'N/A'}</p>
                   </div>
                 </div>
                 <div className="space-y-1 text-left">
-                  <p className="text-[10px] text-zinc-500 uppercase font-bold">Reason</p>
-                  <p className="text-xs text-zinc-300 italic">"{refundForm.reason || 'No reason provided'}"</p>
+                  <p className="text-[10px] text-surface-500 uppercase font-bold">Reason</p>
+                  <p className="text-xs text-surface-600 dark:text-surface-300 italic">"{refundForm.reason || 'No reason provided'}"</p>
                 </div>
               </div>
 
@@ -2118,7 +2183,7 @@ const Refunds = () => {
                 <button 
                   disabled={isProcessing}
                   onClick={() => setShowConfirmRefund(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50"
+                  className="flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -2150,32 +2215,32 @@ const Refunds = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-[2rem] overflow-hidden shadow-2xl"
+              className="relative w-full max-w-2xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2rem] overflow-hidden shadow-2xl"
             >
-              <div className="p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/50">
+              <div className="p-8 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50 dark:bg-surface-950">
                 <div>
-                  <h3 className="font-black text-2xl tracking-tight">Refund Details</h3>
-                  <p className="text-zinc-500 text-sm font-medium">Detailed audit information for this request</p>
+                  <h3 className="font-black text-2xl tracking-tight text-surface-900 dark:text-white">Refund Details</h3>
+                  <p className="text-surface-500 text-sm font-medium">Detailed audit information for this request</p>
                 </div>
-                <button onClick={() => setSelectedRefund(null)} className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl text-zinc-400 hover:text-white transition-all"><X size={20} /></button>
+                <button onClick={() => setSelectedRefund(null)} className="p-3 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 rounded-2xl text-surface-500 dark:text-surface-400 hover:text-bkash transition-all"><X size={20} /></button>
               </div>
               <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Refund ID</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Refund ID</p>
                       <p className="font-mono text-sm text-bkash font-bold">{selectedRefund.refund_id}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Original TrxID</p>
-                      <p className="font-mono text-sm">{selectedRefund.original_trx_id}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Original TrxID</p>
+                      <p className="font-mono text-sm text-surface-900 dark:text-white">{selectedRefund.original_trx_id}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Original Payment ID</p>
-                      <p className="font-mono text-[10px] text-zinc-400 break-all">{selectedRefund.original_payment_id}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Original Payment ID</p>
+                      <p className="font-mono text-[10px] text-surface-500 dark:text-surface-400 break-all">{selectedRefund.original_payment_id}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Status</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Status</p>
                       <span className={cn(
                         "inline-block px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight",
                         selectedRefund.status === 'COMPLETED' ? "bg-bkash/10 text-bkash" : "bg-rose-500/10 text-rose-500"
@@ -2186,55 +2251,55 @@ const Refunds = () => {
                   </div>
                   <div className="space-y-6">
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Refund Amount</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Refund Amount</p>
                       <p className="text-2xl font-black text-rose-500">{formatCurrency(selectedRefund.refund_amount)}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Requested Amount</p>
-                      <p className="text-sm font-bold text-zinc-300">{formatCurrency(selectedRefund.amount)}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Requested Amount</p>
+                      <p className="text-sm font-bold text-surface-600 dark:text-surface-300">{formatCurrency(selectedRefund.amount)}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">SKU / Reference</p>
-                      <p className="text-sm font-medium">{selectedRefund.sku || 'N/A'}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">SKU / Reference</p>
+                      <p className="text-sm font-medium text-surface-900 dark:text-white">{selectedRefund.sku || 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Initiated By</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Initiated By</p>
                       <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center text-[8px] font-black">{selectedRefund.initiated_by?.[0]?.toUpperCase()}</div>
-                        <p className="text-sm font-medium">{selectedRefund.initiated_by}</p>
+                        <div className="w-5 h-5 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center text-[8px] font-black text-surface-900 dark:text-white">{selectedRefund.initiated_by?.[0]?.toUpperCase()}</div>
+                        <p className="text-sm font-medium text-surface-900 dark:text-white">{selectedRefund.initiated_by}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-6 bg-zinc-950/50 rounded-2xl border border-zinc-800 space-y-4">
+                <div className="p-6 bg-surface-50 dark:bg-surface-950 rounded-2xl border border-surface-100 dark:border-surface-800 space-y-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Reason for Refund</p>
-                    <p className="text-sm text-zinc-300 leading-relaxed">{selectedRefund.reason}</p>
+                    <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Reason for Refund</p>
+                    <p className="text-sm text-surface-700 dark:text-surface-300 leading-relaxed">{selectedRefund.reason}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-surface-100 dark:border-surface-800">
                     <div className="space-y-1">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">IP Address</p>
-                      <p className="text-xs font-mono text-zinc-400">{selectedRefund.ip_address || 'N/A'}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">IP Address</p>
+                      <p className="text-xs font-mono text-surface-500 dark:text-surface-400">{selectedRefund.ip_address || 'N/A'}</p>
                     </div>
                     <div className="space-y-1 text-right">
-                      <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Created At</p>
-                      <p className="text-xs text-zinc-400">{new Date(selectedRefund.created_at).toLocaleString()}</p>
+                      <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Created At</p>
+                      <p className="text-xs text-surface-500 dark:text-surface-400">{new Date(selectedRefund.created_at).toLocaleString()}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Raw API Response</p>
-                  <pre className="bg-black p-5 rounded-2xl text-[10px] font-mono text-zinc-500 overflow-x-auto border border-zinc-800">
+                  <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Raw API Response</p>
+                  <pre className="bg-surface-50 dark:bg-black p-5 rounded-2xl text-[10px] font-mono text-surface-500 overflow-x-auto border border-surface-100 dark:border-surface-800">
                     {JSON.stringify(JSON.parse(selectedRefund.response_data), null, 2)}
                   </pre>
                 </div>
               </div>
-              <div className="p-8 bg-zinc-950 border-t border-zinc-800 flex justify-end">
+              <div className="p-8 bg-surface-50 dark:bg-surface-950 border-t border-surface-100 dark:border-surface-800 flex justify-end">
                 <button 
                   onClick={() => setSelectedRefund(null)}
-                  className="px-10 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-black text-sm transition-all"
+                  className="px-10 py-4 bg-surface-900 dark:bg-white text-white dark:text-surface-900 rounded-2xl font-black text-sm transition-all"
                 >
                   Close Audit View
                 </button>
@@ -2304,12 +2369,12 @@ const Subscriptions = () => {
             </div>
             <div>
               <div className="text-emerald-500 text-xs font-bold uppercase tracking-widest mb-1">Active Subscription</div>
-              <h3 className="text-2xl font-black">{currentSub.plan_name}</h3>
-              <p className="text-zinc-500 text-sm">Valid until {new Date(currentSub.end_date).toLocaleDateString()}</p>
+              <h3 className="text-2xl font-black text-surface-900 dark:text-white">{currentSub.plan_name}</h3>
+              <p className="text-surface-500 text-sm">Valid until {new Date(currentSub.end_date).toLocaleDateString()}</p>
             </div>
           </div>
-          <div className="bg-zinc-900/50 px-6 py-4 rounded-2xl border border-zinc-800">
-            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Status</div>
+          <div className="bg-white dark:bg-surface-900 px-6 py-4 rounded-2xl border border-surface-100 dark:border-surface-800 shadow-sm">
+            <div className="text-[10px] text-surface-500 uppercase font-bold mb-1">Status</div>
             <div className="text-emerald-500 font-bold flex items-center gap-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               {currentSub.status}
@@ -2321,22 +2386,22 @@ const Subscriptions = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {plans.map(plan => (
           <div key={plan.id} className={cn(
-            "bg-zinc-900 border rounded-3xl p-8 flex flex-col transition-all",
-            currentSub?.plan_id === plan.id ? "border-bkash ring-4 ring-bkash/10" : "border-zinc-800 hover:border-zinc-700"
+            "bg-white dark:bg-surface-900 border rounded-3xl p-8 flex flex-col transition-all shadow-sm",
+            currentSub?.plan_id === plan.id ? "border-bkash ring-4 ring-bkash/10" : "border-surface-200 dark:border-surface-800 hover:border-bkash/50"
           )}>
             <div className="mb-8">
-              <h4 className="text-xl font-black mb-2">{plan.name}</h4>
-              <p className="text-zinc-500 text-sm leading-relaxed">{plan.description}</p>
+              <h4 className="text-xl font-black mb-2 text-surface-900 dark:text-white">{plan.name}</h4>
+              <p className="text-surface-500 text-sm leading-relaxed">{plan.description}</p>
             </div>
             <div className="mb-8">
               <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black">৳{plan.price}</span>
-                <span className="text-zinc-500 text-sm">/{plan.duration_days} days</span>
+                <span className="text-3xl font-black text-surface-900 dark:text-white">৳{plan.price}</span>
+                <span className="text-surface-500 text-sm">/{plan.duration_days} days</span>
               </div>
             </div>
             <div className="space-y-4 mb-8 flex-1">
               {JSON.parse(plan.features || '[]').map((f: string, i: number) => (
-                <div key={i} className="flex items-center gap-3 text-sm text-zinc-400">
+                <div key={i} className="flex items-center gap-3 text-sm text-surface-600 dark:text-surface-400">
                   <div className="w-5 h-5 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0">
                     <Check className="text-emerald-500" size={12} />
                   </div>
@@ -2350,7 +2415,7 @@ const Subscriptions = () => {
               className={cn(
                 "w-full font-black py-4 rounded-2xl transition-all",
                 currentSub?.plan_id === plan.id 
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                  ? "bg-surface-100 dark:bg-surface-800 text-surface-400 cursor-not-allowed" 
                   : "bg-bkash hover:bg-bkash/90 text-white shadow-xl shadow-bkash/20"
               )}
             >
@@ -2568,25 +2633,25 @@ const AdminPlans = () => {
                   <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="input-field" placeholder="e.g. Professional Tier" required />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Description</label>
-                  <textarea value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash h-24" required />
+                  <label className="text-[10px] font-black text-surface-500 uppercase tracking-widest ml-1">Description</label>
+                  <textarea value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} className="input-field h-24" placeholder="Describe the plan benefits..." required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Price (BDT)</label>
-                    <input type="number" value={newPlan.price} onChange={e => setNewPlan({...newPlan, price: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                    <label className="text-[10px] font-black text-surface-500 uppercase tracking-widest ml-1">Price (BDT)</label>
+                    <input type="number" value={newPlan.price} onChange={e => setNewPlan({...newPlan, price: e.target.value})} className="input-field" required />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Duration (Days)</label>
-                    <input type="number" value={newPlan.duration_days} onChange={e => setNewPlan({...newPlan, duration_days: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                    <label className="text-[10px] font-black text-surface-500 uppercase tracking-widest ml-1">Duration (Days)</label>
+                    <input type="number" value={newPlan.duration_days} onChange={e => setNewPlan({...newPlan, duration_days: e.target.value})} className="input-field" required />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Features (Comma separated)</label>
-                  <input type="text" value={newPlan.features} onChange={e => setNewPlan({...newPlan, features: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" placeholder="Feature 1, Feature 2..." required />
+                  <label className="text-[10px] font-black text-surface-500 uppercase tracking-widest ml-1">Features (Comma separated)</label>
+                  <input type="text" value={newPlan.features} onChange={e => setNewPlan({...newPlan, features: e.target.value})} className="input-field" placeholder="Feature 1, Feature 2..." required />
                 </div>
-                <div className="flex gap-3 pt-4">
-                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                <div className="flex gap-3 pt-4 md:col-span-2">
+                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
                   <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Create Plan</button>
                 </div>
               </form>
@@ -3186,7 +3251,7 @@ const PayoutAccounts = () => {
   if (loading) return <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin text-bkash" /></div>;
 
   return (
-    <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-6 space-y-6 backdrop-blur-sm">
+    <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-6 space-y-6 shadow-sm">
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-lg">Payout Accounts</h3>
         <button onClick={() => setShowAdd(true)} className="p-2 bg-bkash/10 text-bkash rounded-xl hover:bg-bkash hover:text-white transition-all">
@@ -3196,31 +3261,31 @@ const PayoutAccounts = () => {
 
       <div className="space-y-3">
         {accounts.map(acc => (
-          <div key={acc.id} className="p-4 bg-black border border-zinc-800 rounded-2xl flex justify-between items-center group">
+          <div key={acc.id} className="p-4 bg-surface-50 dark:bg-surface-950 border border-surface-100 dark:border-surface-800 rounded-2xl flex justify-between items-center group">
             <div>
               <div className="text-sm font-bold">{acc.provider} ({acc.type})</div>
-              <div className="text-xs text-zinc-500 font-mono">{acc.account_number}</div>
+              <div className="text-xs text-surface-500 font-mono">{acc.account_number}</div>
             </div>
-            <button onClick={() => handleDelete(acc.id)} className="p-2 text-zinc-500 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+            <button onClick={() => handleDelete(acc.id)} className="p-2 text-surface-400 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
               <Trash2 size={16} />
             </button>
           </div>
         ))}
         {accounts.length === 0 && (
-          <div className="text-center py-6 text-zinc-500 text-sm">No payout accounts added.</div>
+          <div className="text-center py-6 text-surface-500 text-sm">No payout accounts added.</div>
         )}
       </div>
 
       <AnimatePresence>
         {showAdd && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-              <h3 className="text-xl font-black mb-6">Add Payout Account</h3>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-2xl">
+              <h3 className="text-xl font-black mb-6 text-surface-900 dark:text-white">Add Payout Account</h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Provider</label>
-                    <select value={newAccount.provider} onChange={e => setNewAccount({...newAccount, provider: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash">
+                    <label className="text-[10px] font-bold text-surface-500 uppercase">Provider</label>
+                    <select value={newAccount.provider} onChange={e => setNewAccount({...newAccount, provider: e.target.value})} className="input-field py-3">
                       <option value="bKash">bKash</option>
                       <option value="Nagad">Nagad</option>
                       <option value="Rocket">Rocket</option>
@@ -3228,8 +3293,8 @@ const PayoutAccounts = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Type</label>
-                    <select value={newAccount.type} onChange={e => setNewAccount({...newAccount, type: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash">
+                    <label className="text-[10px] font-bold text-surface-500 uppercase">Type</label>
+                    <select value={newAccount.type} onChange={e => setNewAccount({...newAccount, type: e.target.value})} className="input-field py-3">
                       <option value="PERSONAL">Personal</option>
                       <option value="AGENT">Agent</option>
                       <option value="MERCHANT">Merchant</option>
@@ -3239,31 +3304,31 @@ const PayoutAccounts = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Number</label>
-                  <input type="text" value={newAccount.account_number} onChange={e => setNewAccount({...newAccount, account_number: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" required />
+                  <label className="text-[10px] font-bold text-surface-500 uppercase">Account Number</label>
+                  <input type="text" value={newAccount.account_number} onChange={e => setNewAccount({...newAccount, account_number: e.target.value})} className="input-field py-3" required />
                 </div>
 
                 {newAccount.type === 'BANK' && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Account Name</label>
-                      <input type="text" value={newAccount.account_name} onChange={e => setNewAccount({...newAccount, account_name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
+                      <label className="text-[10px] font-bold text-surface-500 uppercase">Account Name</label>
+                      <input type="text" value={newAccount.account_name} onChange={e => setNewAccount({...newAccount, account_name: e.target.value})} className="input-field py-3" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Bank Name</label>
-                        <input type="text" value={newAccount.bank_name} onChange={e => setNewAccount({...newAccount, bank_name: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
+                        <label className="text-[10px] font-bold text-surface-500 uppercase">Bank Name</label>
+                        <input type="text" value={newAccount.bank_name} onChange={e => setNewAccount({...newAccount, bank_name: e.target.value})} className="input-field py-3" />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Routing No</label>
-                        <input type="text" value={newAccount.routing_number} onChange={e => setNewAccount({...newAccount, routing_number: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash" />
+                        <label className="text-[10px] font-bold text-surface-500 uppercase">Routing No</label>
+                        <input type="text" value={newAccount.routing_number} onChange={e => setNewAccount({...newAccount, routing_number: e.target.value})} className="input-field py-3" />
                       </div>
                     </div>
                   </div>
                 )}
 
                 <div className="flex gap-3 pt-4">
-                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
                   <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Add Account</button>
                 </div>
               </form>
@@ -3314,19 +3379,19 @@ const Withdrawals = () => {
 
   if (paymentMode === 'OWN') {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-6 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] p-8">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-6 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] p-8 shadow-sm">
         <div className="w-24 h-24 bg-amber-500/10 rounded-full flex items-center justify-center">
           <ShieldAlert className="text-amber-500" size={48} />
         </div>
         <div className="space-y-2">
-          <h3 className="text-2xl font-black tracking-tight">Withdrawals Unavailable</h3>
-          <p className="text-zinc-500 max-w-md mx-auto font-medium">
+          <h3 className="text-2xl font-black tracking-tight text-surface-900 dark:text-white">Withdrawals Unavailable</h3>
+          <p className="text-surface-500 max-w-md mx-auto font-medium">
             You are currently using your own bKash API credentials. Payments are settled directly to your merchant account by bKash. Withdrawals are only required when using our Global API mode.
           </p>
         </div>
         <button 
           onClick={() => window.location.href = '/admin/settings'}
-          className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-8 py-3 rounded-2xl transition-all"
+          className="bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white font-bold px-8 py-3 rounded-2xl transition-all"
         >
           Check Settings
         </button>
@@ -3376,28 +3441,28 @@ const Withdrawals = () => {
           <PayoutAccounts />
         </div>
 
-        <div className="lg:col-span-2 bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
-          <div className="p-6 border-b border-bkash-dark flex justify-between items-center">
+        <div className="lg:col-span-2 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center">
             <h3 className="font-bold text-lg">Withdrawal History</h3>
-            <RefreshCcw size={18} className="text-zinc-500 cursor-pointer hover:text-bkash transition-colors" onClick={fetchData} />
+            <RefreshCcw size={18} className="text-surface-400 cursor-pointer hover:text-bkash transition-colors" onClick={fetchData} />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-wider">
+              <thead className="bg-surface-50 dark:bg-surface-950 text-surface-400 text-[10px] uppercase tracking-wider font-bold">
                 <tr>
-                  <th className="py-4 px-6 font-semibold">Date</th>
-                  <th className="py-4 px-6 font-semibold">Account</th>
-                  <th className="py-4 px-6 font-semibold">Amount</th>
-                  <th className="py-4 px-6 font-semibold">Status</th>
+                  <th className="py-4 px-6">Date</th>
+                  <th className="py-4 px-6">Account</th>
+                  <th className="py-4 px-6">Amount</th>
+                  <th className="py-4 px-6">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
+              <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
                 {withdrawals.map(w => (
-                  <tr key={w.id} className="hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-6 text-xs text-zinc-400">{new Date(w.created_at).toLocaleDateString()}</td>
+                  <tr key={w.id} className="hover:bg-surface-50 dark:hover:bg-surface-950 transition-colors">
+                    <td className="py-4 px-6 text-xs text-surface-500">{new Date(w.created_at).toLocaleDateString()}</td>
                     <td className="py-4 px-6">
                       <div className="text-xs font-bold">{w.provider}</div>
-                      <div className="text-[10px] text-zinc-500 font-mono">{w.account_number}</div>
+                      <div className="text-[10px] text-surface-500 font-mono">{w.account_number}</div>
                     </td>
                     <td className="py-4 px-6 font-bold text-sm">৳{w.amount}</td>
                     <td className="py-4 px-6">
@@ -3422,32 +3487,32 @@ const Withdrawals = () => {
       <AnimatePresence>
         {showRequest && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-              <h3 className="text-xl font-black mb-6">Request Withdrawal</h3>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-2xl">
+              <h3 className="text-xl font-black mb-6 text-surface-900 dark:text-white">Request Withdrawal</h3>
               <form onSubmit={handleRequest} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Amount to Withdraw</label>
+                  <label className="text-[10px] font-bold text-surface-500 uppercase">Amount to Withdraw</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-zinc-500">৳</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-surface-400">৳</span>
                     <input 
                       type="number" 
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-black border border-zinc-800 rounded-2xl py-4 pl-10 pr-4 text-2xl font-bold focus:outline-none focus:border-bkash"
+                      className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-2xl py-4 pl-10 pr-4 text-2xl font-bold text-surface-900 dark:text-white focus:outline-none focus:border-bkash"
                       placeholder="0.00"
                       required
                     />
                   </div>
-                  <div className="text-[10px] text-zinc-500 text-right">Max: ৳{balance.toLocaleString()}</div>
+                  <div className="text-[10px] text-surface-500 text-right">Max: ৳{balance.toLocaleString()}</div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Payout Account</label>
+                  <label className="text-[10px] font-bold text-surface-500 uppercase">Select Payout Account</label>
                   <div className="space-y-2">
                     {accounts.map(acc => (
                       <label key={acc.id} className={cn(
                         "flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all",
-                        selectedAccount === acc.id ? "bg-bkash/10 border-bkash" : "bg-black border-zinc-800 hover:border-zinc-700"
+                        selectedAccount === acc.id ? "bg-bkash/10 border-bkash" : "bg-surface-50 dark:bg-surface-950 border-surface-200 dark:border-surface-800 hover:border-bkash/30"
                       )}>
                         <input 
                           type="radio" 
@@ -3458,13 +3523,13 @@ const Withdrawals = () => {
                         />
                         <div className={cn(
                           "w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                          selectedAccount === acc.id ? "border-bkash" : "border-zinc-700"
+                          selectedAccount === acc.id ? "border-bkash" : "border-surface-300 dark:border-surface-700"
                         )}>
                           {selectedAccount === acc.id && <div className="w-2 h-2 bg-bkash rounded-full" />}
                         </div>
                         <div>
-                          <div className="text-xs font-bold">{acc.provider} ({acc.account_number})</div>
-                          <div className="text-[10px] text-zinc-500">{acc.account_name}</div>
+                          <div className="text-xs font-bold text-surface-900 dark:text-white">{acc.provider} ({acc.account_number})</div>
+                          <div className="text-[10px] text-surface-500">{acc.account_name}</div>
                         </div>
                       </label>
                     ))}
@@ -3472,7 +3537,7 @@ const Withdrawals = () => {
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <button type="button" onClick={() => setShowRequest(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
+                  <button type="button" onClick={() => setShowRequest(false)} className="flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
                   <button type="submit" className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl shadow-xl shadow-bkash/20 transition-all">Submit Request</button>
                 </div>
               </form>
@@ -3492,11 +3557,11 @@ const ApiDocs = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-8 backdrop-blur-sm">
-        <h3 className="text-2xl font-black mb-4 flex items-center gap-3">
+        <h3 className="text-2xl font-black mb-4 flex items-center gap-3 text-white">
           <BookOpen className="text-bkash" size={28} />
           Merchant API Documentation
         </h3>
-        <p className="text-zinc-400 leading-relaxed max-w-3xl">
+        <p className="text-surface-400 leading-relaxed max-w-3xl">
           Integrate bKash payments into your website or application using our simple REST API. 
           Whether you use our Global API or your own credentials, the integration process remains the same.
         </p>
@@ -3504,23 +3569,23 @@ const ApiDocs = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <h4 className="font-bold text-lg mb-4">1. Authentication</h4>
-            <p className="text-sm text-zinc-500 mb-4">All API requests must include your API Key in the headers.</p>
-            <div className="bg-black rounded-xl p-4 font-mono text-xs text-emerald-500 overflow-x-auto">
+          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+            <h4 className="font-bold text-lg mb-4 text-surface-900 dark:text-white">1. Authentication</h4>
+            <p className="text-sm text-surface-500 mb-4">All API requests must include your API Key in the headers.</p>
+            <div className="bg-surface-950 rounded-xl p-4 font-mono text-xs text-emerald-500 overflow-x-auto">
               Authorization: Bearer {apiKey}
             </div>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <h4 className="font-bold text-lg mb-4">2. Create Payment</h4>
-            <p className="text-sm text-zinc-500 mb-4">Endpoint to initiate a bKash payment session.</p>
+          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+            <h4 className="font-bold text-lg mb-4 text-surface-900 dark:text-white">2. Create Payment</h4>
+            <p className="text-sm text-surface-500 mb-4">Endpoint to initiate a bKash payment session.</p>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="bg-emerald-500/10 text-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Post</span>
-                <span className="text-xs font-mono text-zinc-400">{appUrl}/api/bkash/create-payment</span>
+                <span className="text-xs font-mono text-surface-400">{appUrl}/api/bkash/create-payment</span>
               </div>
-              <div className="bg-black rounded-xl p-4 font-mono text-xs text-zinc-300 overflow-x-auto">
+              <div className="bg-surface-950 rounded-xl p-4 font-mono text-xs text-surface-300 overflow-x-auto">
                 {`{
   "amount": "100.00",
   "invoice": "INV-123456",
@@ -3531,17 +3596,17 @@ const ApiDocs = () => {
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-          <h4 className="font-bold text-lg mb-4 flex items-center justify-between">
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+          <h4 className="font-bold text-lg mb-4 flex items-center justify-between text-surface-900 dark:text-white">
             Try It Now
             <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-1 rounded-full uppercase tracking-widest">Sandbox</span>
           </h4>
-          <p className="text-sm text-zinc-500 mb-6">Test the payment flow directly from this documentation.</p>
+          <p className="text-sm text-surface-500 mb-6">Test the payment flow directly from this documentation.</p>
           
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Test Amount</label>
-              <input type="number" defaultValue="10" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-bkash transition-all" />
+              <label className="text-xs font-bold text-surface-500 uppercase tracking-widest">Test Amount</label>
+              <input type="number" defaultValue="10" className="input-field py-3" />
             </div>
             <button 
               onClick={async () => {
@@ -3571,16 +3636,16 @@ const ApiDocs = () => {
             </button>
           </div>
 
-          <div className="mt-8 pt-8 border-t border-zinc-800">
-            <h5 className="font-bold text-sm mb-4">Integration Modes</h5>
+          <div className="mt-8 pt-8 border-t border-surface-100 dark:border-surface-800">
+            <h5 className="font-bold text-sm mb-4 text-surface-900 dark:text-white">Integration Modes</h5>
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
+              <div className="p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
                 <div className="text-bkash font-bold text-xs mb-1">Global Mode</div>
-                <p className="text-[10px] text-zinc-500">No bKash merchant account needed. Withdraw balance to your MFS/Bank.</p>
+                <p className="text-[10px] text-surface-500">No bKash merchant account needed. Withdraw balance to your MFS/Bank.</p>
               </div>
-              <div className="p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
+              <div className="p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
                 <div className="text-blue-500 font-bold text-xs mb-1">Own Mode</div>
-                <p className="text-[10px] text-zinc-500">Use your own bKash credentials. Money goes directly to your account.</p>
+                <p className="text-[10px] text-surface-500">Use your own bKash credentials. Money goes directly to your account.</p>
               </div>
             </div>
           </div>
@@ -3664,146 +3729,135 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4 transition-colors duration-300">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface-50 dark:bg-surface-950 relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-bkash/10 blur-[120px] rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full" />
+
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden"
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="w-full max-w-md relative z-10"
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-bkash/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-bkash/5 rounded-full -ml-16 -mb-16 blur-3xl" />
-
-        <div className="text-center mb-10 relative">
-          <div className="w-20 h-20 bg-bkash rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-bkash/20 rotate-3">
-            <CreditCard className="text-white" size={40} />
+        <div className="bg-white dark:bg-surface-900 rounded-[3rem] p-10 shadow-2xl border border-surface-100 dark:border-surface-800">
+          <div className="text-center mb-10">
+            <BkashLogo className="justify-center mb-6" />
+            <h2 className="text-2xl font-black tracking-tighter text-surface-900 dark:text-white">Merchant Portal</h2>
+            <p className="text-sm text-surface-500 font-medium mt-1">Sign in to manage your business</p>
           </div>
-          <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Admin Portal</h2>
-          <p className="text-zinc-500 mt-2 font-medium">Secure access to bKash Enterprise Gateway</p>
-        </div>
 
-        <form onSubmit={handleLogin} className="space-y-6 relative">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Username or Email</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-2">Username</label>
+              <div className="relative">
+                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-surface-400" size={18} />
+                <input 
+                  type="text" 
+                  required 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-800 rounded-2xl py-4 pl-12 pr-6 text-sm font-bold focus:border-bkash focus:ring-0 transition-all" 
+                  placeholder="Enter your username"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center ml-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-surface-400">Password</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowForgotModal(true)}
+                  className="text-[10px] font-black uppercase tracking-widest text-bkash hover:underline"
+                >
+                  Forgot?
+                </button>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-surface-400" size={18} />
+                <input 
+                  type="password" 
+                  required 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-800 rounded-2xl py-4 pl-12 pr-6 text-sm font-bold focus:border-bkash focus:ring-0 transition-all" 
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 ml-2">
               <input 
-                type="text" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
-                placeholder="admin@example.com"
-                required
+                type="checkbox" 
+                id="remember" 
+                checked={rememberMe} 
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="rounded border-surface-200 text-bkash focus:ring-bkash"
               />
+              <label htmlFor="remember" className="text-xs text-surface-500 font-medium cursor-pointer">Remember me</label>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center px-1">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Password</label>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotModal(true)}
-                className="text-[10px] font-bold text-bkash hover:underline"
-              >
-                Forgot Password?
-              </button>
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 ml-1">
-            <input 
-              type="checkbox" 
-              id="remember" 
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-bkash focus:ring-bkash/50"
-            />
-            <label htmlFor="remember" className="text-xs text-zinc-500 cursor-pointer">Remember me</label>
-          </div>
+            <button 
+              type="submit" 
+              disabled={isLoading} 
+              className="w-full btn-primary py-5 rounded-2xl"
+            >
+              {isLoading ? <Loader2 className="animate-spin mx-auto" /> : "Sign In to Dashboard"}
+            </button>
+          </form>
 
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className="w-full bg-bkash hover:bg-bkash/90 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
-          >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Sign In to Dashboard"}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-zinc-500">
-            Don't have a merchant account?{" "}
-            <Link to="/merchant/register" className="text-bkash font-bold hover:underline">
-              Register Now
-            </Link>
-          </p>
+          <div className="mt-10 pt-8 border-t border-surface-100 dark:border-surface-800 text-center">
+            <p className="text-xs text-surface-500 font-medium">
+              Don't have a merchant account?{" "}
+              <Link to="/merchant/register" className="text-bkash font-black hover:underline">Register Now</Link>
+            </p>
+          </div>
         </div>
-
-        <AnimatePresence>
-          {showForgotModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="w-full max-w-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl"
-              >
-                <h3 className="text-xl font-black text-zinc-900 dark:text-white mb-2">Reset Password</h3>
-                <p className="text-zinc-500 text-sm mb-6">Enter your email address and we'll send you a link to reset your password.</p>
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Email Address</label>
-                    <input 
-                      type="email" 
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 px-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
-                      placeholder="admin@example.com"
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button 
-                      type="button"
-                      onClick={() => setShowForgotModal(false)}
-                      className="flex-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-bold py-3 rounded-xl transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit"
-                      disabled={isForgotLoading}
-                      className="flex-1 bg-bkash hover:bg-bkash/90 text-white font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      {isForgotLoading ? <Loader2 className="animate-spin" size={18} /> : "Send Link"}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        <div className="mt-8 pt-8 border-t border-zinc-200 dark:border-zinc-800 text-center">
-          <Link to="/" className="text-zinc-500 hover:text-bkash text-sm font-medium transition-colors flex items-center justify-center gap-2">
-            <ArrowLeft size={16} /> Back to Checkout
-          </Link>
-        </div>
+        <p className="mt-8 text-center text-[10px] font-black uppercase tracking-widest text-surface-400">© 2026 bKash Enterprise Solutions</p>
       </motion.div>
-      <p className="text-center text-zinc-600 text-[10px] mt-8 uppercase tracking-widest absolute bottom-8 w-full">
-        &copy; {new Date().getFullYear()} bKash Enterprise Gateway • Secure Environment
-      </p>
+
+      {/* Forgot Password Modal */}
+      <AnimatePresence>
+        {showForgotModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-surface-900 rounded-[2.5rem] p-8 w-full max-w-sm border border-surface-100 dark:border-surface-800"
+            >
+              <h3 className="text-xl font-black tracking-tighter mb-2">Reset Password</h3>
+              <p className="text-sm text-surface-500 mb-6">Enter your email to receive a reset link.</p>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <input 
+                  type="email" 
+                  required 
+                  value={forgotEmail} 
+                  onChange={(e) => setForgotEmail(e.target.value)} 
+                  className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-800 rounded-xl py-3 px-4 text-sm font-bold" 
+                  placeholder="email@example.com"
+                />
+                <div className="flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowForgotModal(false)}
+                    className="flex-1 btn-secondary py-3"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isForgotLoading}
+                    className="flex-1 btn-primary py-3"
+                  >
+                    {isForgotLoading ? <Loader2 className="animate-spin mx-auto" /> : "Send Link"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -3839,60 +3893,60 @@ const MerchantRegister = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-1 bg-bkash" />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative z-10"
+        className="w-full max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative z-10"
       >
         <div className="flex flex-col items-center mb-10">
           <div className="w-20 h-20 bg-bkash rounded-3xl flex items-center justify-center shadow-2xl shadow-bkash/30 mb-6 rotate-3">
             <UserPlus className="text-white" size={40} />
           </div>
-          <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Merchant Sign Up</h2>
-          <p className="text-zinc-500 font-medium mt-2 text-center">Start accepting bKash payments today.</p>
+          <h2 className="text-3xl font-black text-surface-900 dark:text-white tracking-tight">Merchant Sign Up</h2>
+          <p className="text-surface-500 font-medium mt-2 text-center">Start accepting bKash payments today.</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Business Name</label>
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Business Name</label>
               <div className="relative group">
-                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="text" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  className="input-field py-4 pl-12" 
                   placeholder="Acme Corp"
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Email Address</label>
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Email Address</label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  className="input-field py-4 pl-12" 
                   placeholder="merchant@example.com"
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Password</label>
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Password</label>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-bkash transition-colors" size={18} />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-zinc-900 dark:text-white focus:border-bkash focus:outline-none transition-all" 
+                  className="input-field py-4 pl-12" 
                   placeholder="••••••••"
                   required
                 />
@@ -3903,14 +3957,14 @@ const MerchantRegister = () => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-bkash hover:bg-bkash/90 text-white font-black py-4 rounded-xl shadow-xl shadow-bkash/20 transition-all flex items-center justify-center gap-2"
+            className="w-full btn-primary py-4 rounded-xl"
           >
             {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Create Merchant Account"}
           </button>
         </form>
 
         <div className="mt-8 text-center">
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-surface-500">
             Already have an account?{" "}
             <Link to="/admin/login" className="text-bkash font-bold hover:underline">
               Sign In
@@ -4008,12 +4062,12 @@ const UserProfile = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
         <div className="h-32 bg-gradient-to-r from-bkash to-rose-400" />
         <div className="px-8 pb-8">
           <div className="relative -mt-16 mb-6 flex justify-between items-end">
             <div className="relative group">
-              <div className="h-32 w-32 rounded-3xl bg-zinc-800 border-4 border-zinc-900 overflow-hidden shadow-xl">
+              <div className="h-32 w-32 rounded-3xl bg-surface-100 dark:bg-surface-800 border-4 border-white dark:border-surface-900 overflow-hidden shadow-xl">
                 <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <button 
@@ -4034,7 +4088,7 @@ const UserProfile = () => {
             {!isEditing && (
               <button 
                 onClick={() => setIsEditing(true)}
-                className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2"
+                className="bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-900 dark:text-white px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-sm"
               >
                 <Settings size={18} /> Edit Profile
               </button>
@@ -4044,43 +4098,43 @@ const UserProfile = () => {
           <form onSubmit={handleSave} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-400">Full Name</label>
+                <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Full Name</label>
                 <input 
                   type="text" 
                   disabled={!isEditing}
                   value={user.name}
                   onChange={(e) => setUser({...user, name: e.target.value})}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all disabled:opacity-50"
+                  className="input-field py-3 disabled:opacity-50"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-400">Email Address</label>
+                <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Email Address</label>
                 <input 
                   type="email" 
                   disabled={!isEditing}
                   value={user.email}
                   onChange={(e) => setUser({...user, email: e.target.value})}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all disabled:opacity-50"
+                  className="input-field py-3 disabled:opacity-50"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-400">Phone Number</label>
+                <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Phone Number</label>
                 <input 
                   type="tel" 
                   disabled={!isEditing}
                   value={user.phone}
                   onChange={(e) => setUser({...user, phone: e.target.value})}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all disabled:opacity-50"
+                  className="input-field py-3 disabled:opacity-50"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-400">Avatar URL</label>
+                <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Avatar URL</label>
                 <input 
                   type="url" 
                   disabled={!isEditing}
                   value={user.avatar}
                   onChange={(e) => setUser({...user, avatar: e.target.value})}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all disabled:opacity-50"
+                  className="input-field py-3 disabled:opacity-50"
                   placeholder="https://example.com/avatar.jpg"
                 />
               </div>
@@ -4090,14 +4144,14 @@ const UserProfile = () => {
               <div className="flex gap-4 pt-4">
                 <button 
                   type="submit"
-                  className="bg-bkash hover:bg-bkash/90 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-bkash/20 transition-all"
+                  className="bg-bkash hover:bg-bkash-dark text-white px-8 py-3 rounded-xl font-black shadow-lg shadow-bkash/20 transition-all uppercase tracking-widest text-xs"
                 >
                   Save Changes
                 </button>
                 <button 
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                  className="bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-600 dark:text-surface-300 px-8 py-3 rounded-xl font-black transition-all uppercase tracking-widest text-xs"
                 >
                   Cancel
                 </button>
@@ -4107,31 +4161,31 @@ const UserProfile = () => {
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+        <h3 className="text-xl font-black text-surface-900 dark:text-white mb-6 flex items-center gap-3 tracking-tighter">
           <ShieldCheck className="text-bkash" />
           Login Credentials
         </h3>
         <form onSubmit={handleUpdateCredentials} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-400">New Username</label>
+              <label className="text-sm font-bold text-surface-600 dark:text-surface-400">New Username</label>
               <input 
                 type="text" 
                 value={credentials.username}
                 onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                className="input-field py-3"
                 placeholder="Enter new username"
                 required
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-400">New Password</label>
+              <label className="text-sm font-bold text-surface-600 dark:text-surface-400">New Password</label>
               <input 
                 type="password" 
                 value={credentials.password}
                 onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                className="input-field py-3"
                 placeholder="Enter new password"
                 required
               />
@@ -4140,7 +4194,7 @@ const UserProfile = () => {
           <button 
             type="submit"
             disabled={isUpdatingCreds}
-            className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+            className="bg-surface-900 dark:bg-white text-white dark:text-surface-900 px-8 py-3 rounded-xl font-black transition-all flex items-center gap-2 disabled:opacity-50 uppercase tracking-widest text-xs"
           >
             {isUpdatingCreds ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
             Update Credentials
@@ -4173,8 +4227,8 @@ const Analytics = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
-          <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+          <h3 className="font-bold text-xl mb-8 flex items-center gap-2 text-surface-900 dark:text-white">
             <TrendingUp className="text-bkash" size={20} />
             Revenue Trends (Last 7 Days)
           </h3>
@@ -4187,18 +4241,18 @@ const Analytics = () => {
                     <stop offset="95%" stopColor="#E2136E" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="date" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-surface-200 dark:text-surface-800" vertical={false} />
+                <XAxis dataKey="date" stroke="currentColor" className="text-surface-400" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="currentColor" className="text-surface-400" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px' }} />
                 <Area type="monotone" dataKey="total" stroke="#E2136E" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
-          <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+          <h3 className="font-bold text-xl mb-8 flex items-center gap-2 text-surface-900 dark:text-white">
             <Activity className="text-blue-500" size={20} />
             Transaction Status Distribution
           </h3>
@@ -4219,7 +4273,7 @@ const Analytics = () => {
                     <Cell key={`cell-${index}`} fill={['#E2136E', '#10b981', '#f59e0b', '#3b82f6'][index % 4]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px' }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -4227,18 +4281,18 @@ const Analytics = () => {
         </div>
       </div>
 
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
-        <h3 className="font-bold text-xl mb-8 flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+        <h3 className="font-bold text-xl mb-8 flex items-center gap-2 text-surface-900 dark:text-white">
           <Zap className="text-amber-500" size={20} />
           Hourly Transaction Volume
         </h3>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data?.hourlyVolume}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-              <XAxis dataKey="hour" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-surface-200 dark:text-surface-800" vertical={false} />
+              <XAxis dataKey="hour" stroke="currentColor" className="text-surface-400" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="currentColor" className="text-surface-400" fontSize={12} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px' }} />
               <Bar dataKey="total" fill="#E2136E" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -4263,39 +4317,39 @@ const Customers = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
-        <div className="p-6 border-b border-bkash-dark flex justify-between items-center bg-zinc-950/50">
-          <h3 className="font-bold text-lg">Customer Directory</h3>
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 dark:bg-surface-950/50">
+          <h3 className="font-bold text-lg text-surface-900 dark:text-white">Customer Directory</h3>
           <div className="flex gap-2">
-            <button className="bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-zinc-700 transition-colors">Export CSV</button>
+            <button className="bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">Export CSV</button>
             <button className="bg-bkash text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-bkash/90 transition-colors shadow-lg shadow-bkash/20">Add Customer</button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-surface-50 dark:bg-surface-950 text-surface-500 text-[10px] uppercase tracking-widest font-bold">
               <tr>
-                <th className="py-4 px-6 font-bold">Customer MSISDN</th>
-                <th className="py-4 px-6 font-bold">Total Transactions</th>
-                <th className="py-4 px-6 font-bold">Total Spent</th>
-                <th className="py-4 px-6 font-bold">Last Activity</th>
-                <th className="py-4 px-6 font-bold text-right">Status</th>
+                <th className="py-4 px-6">Customer MSISDN</th>
+                <th className="py-4 px-6">Total Transactions</th>
+                <th className="py-4 px-6">Total Spent</th>
+                <th className="py-4 px-6">Last Activity</th>
+                <th className="py-4 px-6 text-right">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
               {customers.map((c, i) => (
-                <tr key={i} className="border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors group">
+                <tr key={i} className="hover:bg-surface-50 dark:hover:bg-surface-950 transition-colors group">
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-bkash/10 flex items-center justify-center text-bkash font-bold text-xs">
                         {c.msisdn.slice(-2)}
                       </div>
-                      <span className="font-bold text-sm text-zinc-200">{c.msisdn}</span>
+                      <span className="font-bold text-sm text-surface-900 dark:text-white">{c.msisdn}</span>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-zinc-400 text-sm">{c.total_transactions} orders</td>
-                  <td className="py-4 px-6 font-black text-white">{formatCurrency(c.total_spent)}</td>
-                  <td className="py-4 px-6 text-zinc-500 text-xs">{new Date(c.last_transaction).toLocaleString()}</td>
+                  <td className="py-4 px-6 text-surface-500 text-sm">{c.total_transactions} orders</td>
+                  <td className="py-4 px-6 font-black text-surface-900 dark:text-white">{formatCurrency(c.total_spent)}</td>
+                  <td className="py-4 px-6 text-surface-400 text-xs">{new Date(c.last_transaction).toLocaleString()}</td>
                   <td className="py-4 px-6 text-right">
                     <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase">Active</span>
                   </td>
@@ -4338,42 +4392,42 @@ const Statements = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-sm">
-        <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+        <h3 className="text-xl font-bold mb-8 flex items-center gap-3 text-surface-900 dark:text-white">
           <Download className="text-bkash" />
           Generate Account Statement
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">From Date</label>
+            <label className="text-xs font-bold text-surface-500 uppercase tracking-widest ml-1">From Date</label>
             <input 
               type="date" 
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-bkash focus:outline-none transition-all" 
+              className="input-field py-3" 
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">To Date</label>
+            <label className="text-xs font-bold text-surface-500 uppercase tracking-widest ml-1">To Date</label>
             <input 
               type="date" 
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-bkash focus:outline-none transition-all" 
+              className="input-field py-3" 
             />
           </div>
           <div className="flex gap-3">
             <button 
               onClick={fetchStatement}
               disabled={loading}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="flex-1 btn-secondary py-3"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : "Fetch Data"}
             </button>
             <button 
               onClick={handleDownload}
               disabled={transactions.length === 0}
-              className="flex-1 bg-bkash hover:bg-bkash/90 disabled:bg-zinc-800 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-bkash/20"
+              className="flex-1 btn-primary py-3"
             >
               <Download size={18} /> Download PDF
             </button>
@@ -4382,13 +4436,13 @@ const Statements = () => {
       </div>
 
       {transactions.length > 0 && (
-        <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl overflow-hidden backdrop-blur-sm">
-          <div className="p-6 border-b border-bkash-dark bg-zinc-950/50">
-            <h4 className="font-bold">Preview ({transactions.length} Transactions)</h4>
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-950/50">
+            <h4 className="font-bold text-surface-900 dark:text-white">Preview ({transactions.length} Transactions)</h4>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-bkash-dark/50 text-zinc-500 text-[10px] uppercase tracking-widest">
+              <thead className="bg-surface-50 dark:bg-surface-950 text-surface-500 text-[10px] uppercase tracking-widest font-bold">
                 <tr>
                   <th className="py-4 px-6">Date</th>
                   <th className="py-4 px-6">Trx ID</th>
@@ -4396,12 +4450,12 @@ const Statements = () => {
                   <th className="py-4 px-6 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
                 {transactions.map((t, i) => (
-                  <tr key={i} className="border-b border-bkash-dark/50">
-                    <td className="py-4 px-6 text-sm text-zinc-400">{new Date(t.created_at).toLocaleDateString()}</td>
-                    <td className="py-4 px-6 font-mono text-sm">{t.trx_id}</td>
-                    <td className="py-4 px-6 text-sm">{t.customer_msisdn}</td>
+                  <tr key={i} className="hover:bg-surface-50 dark:hover:bg-surface-950 transition-colors">
+                    <td className="py-4 px-6 text-sm text-surface-500">{new Date(t.created_at).toLocaleDateString()}</td>
+                    <td className="py-4 px-6 font-mono text-sm text-surface-900 dark:text-white">{t.trx_id}</td>
+                    <td className="py-4 px-6 text-sm text-surface-700 dark:text-surface-300">{t.customer_msisdn}</td>
                     <td className="py-4 px-6 text-right font-bold text-bkash">{formatCurrency(t.amount)}</td>
                   </tr>
                 ))}
@@ -4417,34 +4471,34 @@ const Statements = () => {
 const Security = () => (
   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
           <ShieldCheck className="text-bkash" />
           Security Overview
         </h3>
         <div className="space-y-4">
-          <div className="flex justify-between items-center p-4 bg-bkash-dark/50 rounded-xl">
+          <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
             <div>
-              <p className="font-bold">Two-Factor Authentication</p>
-              <p className="text-xs text-zinc-500">Add an extra layer of security</p>
+              <p className="font-bold text-surface-900 dark:text-white">Two-Factor Authentication</p>
+              <p className="text-xs text-surface-500">Add an extra layer of security</p>
             </div>
             <div className="w-12 h-6 bg-bkash rounded-full relative">
               <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
             </div>
           </div>
-          <div className="flex justify-between items-center p-4 bg-bkash-dark/50 rounded-xl">
+          <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
             <div>
-              <p className="font-bold">IP Whitelisting</p>
-              <p className="text-xs text-zinc-500">Restrict access to specific IPs</p>
+              <p className="font-bold text-surface-900 dark:text-white">IP Whitelisting</p>
+              <p className="text-xs text-surface-500">Restrict access to specific IPs</p>
             </div>
-            <div className="w-12 h-6 bg-zinc-700 rounded-full relative">
+            <div className="w-12 h-6 bg-surface-200 dark:bg-surface-700 rounded-full relative">
               <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
             </div>
           </div>
         </div>
       </div>
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl p-6 backdrop-blur-sm">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
           <Activity className="text-bkash" />
           Recent Logins
         </h3>
@@ -4453,12 +4507,12 @@ const Security = () => (
             { device: "Chrome / Windows", ip: "103.120.2.45", time: "Just now" },
             { device: "Safari / iPhone", ip: "192.168.1.1", time: "2 hours ago" },
           ].map((l, i) => (
-            <div key={i} className="flex justify-between items-center p-3 border-b border-zinc-800 last:border-0">
+            <div key={i} className="flex justify-between items-center p-3 border-b border-surface-100 dark:border-surface-800 last:border-0">
               <div>
-                <p className="text-sm font-bold">{l.device}</p>
-                <p className="text-[10px] text-zinc-500">{l.ip}</p>
+                <p className="text-sm font-bold text-surface-900 dark:text-white">{l.device}</p>
+                <p className="text-[10px] text-surface-500">{l.ip}</p>
               </div>
-              <p className="text-[10px] text-zinc-500">{l.time}</p>
+              <p className="text-[10px] text-surface-500">{l.time}</p>
             </div>
           ))}
         </div>
@@ -4479,11 +4533,11 @@ const NotificationBar = () => {
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors relative"
+        className="p-2.5 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl text-surface-400 hover:text-bkash transition-colors relative shadow-sm"
       >
         <Bell size={20} />
         {notifications.length > 0 && (
-          <span className="absolute top-2 right-2 w-2 h-2 bg-bkash rounded-full border-2 border-zinc-900" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-bkash rounded-full border-2 border-white dark:border-surface-900" />
         )}
       </button>
 
@@ -4501,32 +4555,32 @@ const NotificationBar = () => {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-2 w-80 bg-bkash-dark border border-bkash-dark rounded-2xl shadow-2xl z-[80] overflow-hidden"
+              className="absolute right-0 mt-2 w-80 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-2xl z-[80] overflow-hidden"
             >
-              <div className="p-4 border-b border-bkash-dark flex justify-between items-center bg-zinc-950/50">
-                <h4 className="font-bold text-sm">Notifications</h4>
-                <button onClick={() => setNotifications([])} className="text-[10px] text-zinc-500 hover:text-bkash">Clear all</button>
+              <div className="p-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 dark:bg-surface-950/50">
+                <h4 className="font-bold text-sm text-surface-900 dark:text-white">Notifications</h4>
+                <button onClick={() => setNotifications([])} className="text-[10px] text-surface-500 hover:text-bkash font-bold uppercase tracking-wider">Clear all</button>
               </div>
               <div className="max-h-96 overflow-y-auto custom-scrollbar">
                 {notifications.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-600">
+                  <div className="p-8 text-center text-surface-400">
                     <Bell size={32} className="mx-auto mb-2 opacity-20" />
                     <p className="text-xs">No new notifications</p>
                   </div>
                 ) : (
                   notifications.map((n) => (
-                    <div key={n.id} className="p-4 border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
+                    <div key={n.id} className="p-4 border-b border-surface-100 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-950 transition-colors">
                       <div className="flex justify-between items-start mb-1">
-                        <h5 className="font-bold text-xs text-white">{n.title}</h5>
-                        <span className="text-[9px] text-zinc-500">{n.time}</span>
+                        <h5 className="font-bold text-xs text-surface-900 dark:text-white">{n.title}</h5>
+                        <span className="text-[9px] text-surface-500">{n.time}</span>
                       </div>
-                      <p className="text-[11px] text-zinc-400 leading-relaxed">{n.message}</p>
+                      <p className="text-[11px] text-surface-500 leading-relaxed">{n.message}</p>
                     </div>
                   ))
                 )}
               </div>
-              <div className="p-3 bg-zinc-950/50 border-t border-bkash-dark text-center">
-                <button className="text-[10px] font-bold text-bkash hover:underline">View all activity</button>
+              <div className="p-3 bg-surface-50 dark:bg-surface-950 border-t border-surface-100 dark:border-surface-800 text-center">
+                <button className="text-[10px] font-bold text-bkash hover:underline uppercase tracking-widest">View all activity</button>
               </div>
             </motion.div>
           </>
@@ -4589,8 +4643,8 @@ const SearchTransaction = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-5 md:p-8 backdrop-blur-sm shadow-2xl">
-        <h3 className="text-xl md:text-2xl font-bold mb-6 flex items-center gap-3">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-5 md:p-8 shadow-sm">
+        <h3 className="text-xl md:text-2xl font-bold mb-6 flex items-center gap-3 text-surface-900 dark:text-white">
           <Search className="text-bkash" />
           Search Transaction Details
         </h3>
@@ -4600,12 +4654,12 @@ const SearchTransaction = () => {
             placeholder="Enter Transaction ID (e.g. TST...)" 
             value={trxID}
             onChange={(e) => setTrxID(e.target.value)}
-            className="flex-1 bg-bkash-dark/50 border border-bkash-dark rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+            className="input-field py-4"
           />
           <button 
             type="submit" 
             disabled={loading || !isOnline}
-            className="bg-bkash hover:bg-bkash/90 disabled:bg-zinc-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+            className="btn-primary px-8 py-4"
           >
             {loading ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
             Search
@@ -4614,8 +4668,8 @@ const SearchTransaction = () => {
 
         {result && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-10 space-y-8">
-            <div className="flex justify-between items-center border-b border-bkash-dark pb-4">
-              <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest">Search Result</h4>
+            <div className="flex justify-between items-center border-b border-surface-100 dark:border-surface-800 pb-4">
+              <h4 className="text-xs text-surface-500 uppercase font-black tracking-widest">Search Result</h4>
               {result.statusCode === "0000" && (
                 <button 
                   onClick={handleDownloadReceipt}
@@ -4627,18 +4681,18 @@ const SearchTransaction = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-6">
-                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest border-b border-bkash-dark pb-2">Transaction Information</h4>
+                <h4 className="text-xs text-surface-500 uppercase font-black tracking-widest border-b border-surface-100 dark:border-surface-800 pb-2">Transaction Information</h4>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Transaction ID</span>
+                    <span className="text-sm text-surface-500">Transaction ID</span>
                     <span className="font-bold text-bkash">{result.trxID || "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Amount</span>
-                    <span className="font-black text-xl">{result.amount} {result.currency}</span>
+                    <span className="text-sm text-surface-500">Amount</span>
+                    <span className="font-black text-xl text-surface-900 dark:text-white">{result.amount} {result.currency}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Status</span>
+                    <span className="text-sm text-surface-500">Status</span>
                     <span className={cn(
                       "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight",
                       result.transactionStatus === 'Completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
@@ -4647,48 +4701,48 @@ const SearchTransaction = () => {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Transaction Type</span>
-                    <span className="text-sm font-medium">{result.transactionType || "N/A"}</span>
+                    <span className="text-sm text-surface-500">Transaction Type</span>
+                    <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{result.transactionType || "N/A"}</span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-6">
-                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest border-b border-bkash-dark pb-2">Customer & Time</h4>
+                <h4 className="text-xs text-surface-500 uppercase font-black tracking-widest border-b border-surface-100 dark:border-surface-800 pb-2">Customer & Time</h4>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Customer MSISDN</span>
-                    <span className="text-sm font-bold">{result.customerMsisdn || "N/A"}</span>
+                    <span className="text-sm text-surface-500">Customer MSISDN</span>
+                    <span className="text-sm font-bold text-surface-900 dark:text-white">{result.customerMsisdn || "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Initiation Time</span>
-                    <span className="text-sm text-zinc-300">{result.initiationTime || "N/A"}</span>
+                    <span className="text-sm text-surface-500">Initiation Time</span>
+                    <span className="text-sm text-surface-600 dark:text-surface-400">{result.initiationTime || "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Completed Time</span>
-                    <span className="text-sm text-zinc-300">{result.completedTime || "N/A"}</span>
+                    <span className="text-sm text-surface-500">Completed Time</span>
+                    <span className="text-sm text-surface-600 dark:text-surface-400">{result.completedTime || "N/A"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-zinc-500">Organization Code</span>
-                    <span className="text-sm text-zinc-400">{result.organizationShortCode || "N/A"}</span>
+                    <span className="text-sm text-surface-500">Organization Code</span>
+                    <span className="text-sm text-surface-600 dark:text-surface-400">{result.organizationShortCode || "N/A"}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-zinc-950/50 rounded-2xl border border-bkash-dark space-y-4">
+            <div className="p-6 bg-surface-50 dark:bg-surface-950 rounded-2xl border border-surface-100 dark:border-surface-800 space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-zinc-500 uppercase font-black tracking-widest">Transaction Reference</span>
-                <span className="text-sm font-medium italic">"{result.transactionReference || 'No reference'}"</span>
+                <span className="text-xs text-surface-500 uppercase font-black tracking-widest">Transaction Reference</span>
+                <span className="text-sm font-medium italic text-surface-700 dark:text-surface-300">"{result.transactionReference || 'No reference'}"</span>
               </div>
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-bkash-dark">
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-surface-100 dark:border-surface-800">
                 <div className="space-y-1">
-                  <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Status Code</p>
-                  <p className="text-xs font-mono text-white">{result.statusCode}</p>
+                  <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Status Code</p>
+                  <p className="text-xs font-mono text-surface-900 dark:text-white">{result.statusCode}</p>
                 </div>
                 <div className="space-y-1 text-right">
-                  <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Status Message</p>
-                  <p className="text-xs text-zinc-400">{result.statusMessage}</p>
+                  <p className="text-[10px] text-surface-500 uppercase font-black tracking-widest">Status Message</p>
+                  <p className="text-xs text-surface-600 dark:text-surface-400">{result.statusMessage}</p>
                 </div>
               </div>
             </div>
@@ -4794,23 +4848,23 @@ const UserManagement = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-xl md:text-2xl font-bold">User Management</h3>
+        <h3 className="text-xl md:text-2xl font-bold text-surface-900 dark:text-white">User Management</h3>
         <button 
           onClick={() => {
             setEditingUser(null);
-            setFormData({ username: "", password: "", role: "user", permissions: [] });
+            setFormData({ username: "", email: "", password: "", role: "user", permissions: [] });
             setIsModalOpen(true);
           }}
-          className="w-full sm:w-auto bg-bkash text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2"
+          className="w-full sm:w-auto bg-bkash text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-bkash-dark transition-colors shadow-lg shadow-bkash/20"
         >
           <UserPlus size={20} /> Add User
         </button>
       </div>
 
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-2xl overflow-hidden backdrop-blur-sm">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[600px]">
-            <thead className="bg-bkash-dark/50 text-zinc-500 text-xs uppercase tracking-wider">
+            <thead className="bg-surface-50 dark:bg-surface-950 text-surface-500 text-xs uppercase tracking-wider">
               <tr>
                 <th className="py-4 px-6">User</th>
                 <th className="py-4 px-6">Role</th>
@@ -4822,15 +4876,15 @@ const UserManagement = () => {
               {loading ? (
                 <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="animate-spin inline-block" /></td></tr>
               ) : users.map(user => (
-                <tr key={user.id} className="border-b border-bkash-dark/50 hover:bg-bkash-dark/30 transition-colors">
+                <tr key={user.id} className="border-b border-surface-100 dark:border-surface-800/50 hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors">
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-bkash/10 flex items-center justify-center text-bkash font-bold text-sm overflow-hidden">
                         {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-bold text-sm text-white">{user.username}</p>
-                        <p className="text-[10px] text-zinc-500">{user.email}</p>
+                        <p className="font-bold text-sm text-surface-900 dark:text-white">{user.username}</p>
+                        <p className="text-[10px] text-surface-500">{user.email}</p>
                       </div>
                     </div>
                   </td>
@@ -4845,7 +4899,7 @@ const UserManagement = () => {
                   <td className="py-4 px-6">
                     <div className="flex flex-wrap gap-1">
                       {user.permissions.split(",").map((p: string) => (
-                        <span key={p} className="bg-zinc-800 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{p}</span>
+                        <span key={p} className="bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">{p}</span>
                       ))}
                     </div>
                   </td>
@@ -4862,13 +4916,13 @@ const UserManagement = () => {
                         });
                         setIsModalOpen(true);
                       }}
-                      className="p-2 text-zinc-400 hover:text-white transition-colors"
+                      className="p-2 text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors"
                     >
                       <Edit size={18} />
                     </button>
                     <button 
                       onClick={() => handleDelete(user.id)}
-                      className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"
+                      className="p-2 text-surface-400 hover:text-rose-500 transition-colors"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -4892,44 +4946,44 @@ const UserManagement = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-5 md:p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
+              className="relative w-full max-w-2xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-5 md:p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
             >
-              <h4 className="text-xl font-bold mb-6">{editingUser ? "Edit User" : "Add New User"}</h4>
+              <h4 className="text-xl font-bold mb-6 text-surface-900 dark:text-white">{editingUser ? "Edit User" : "Add New User"}</h4>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Username</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Username</label>
                     <input 
                       type="text" required
                       value={formData.username}
                       onChange={e => setFormData({...formData, username: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Email Address</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Email Address</label>
                     <input 
                       type="email" required
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Password {editingUser && "(Leave blank to keep current)"}</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Password {editingUser && "(Leave blank to keep current)"}</label>
                     <input 
                       type="password" required={!editingUser}
                       value={formData.password}
                       onChange={e => setFormData({...formData, password: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-400">Role</label>
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Role</label>
                     <select 
                       value={formData.role}
                       onChange={e => setFormData({...formData, role: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-bkash/50 transition-all"
+                      className="input-field py-3"
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
@@ -4937,7 +4991,7 @@ const UserManagement = () => {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-zinc-400">Permissions</label>
+                  <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Permissions</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3">
                     {allPermissions.map(perm => (
                       <button
@@ -4948,7 +5002,7 @@ const UserManagement = () => {
                           "px-3 py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all border",
                           formData.permissions.includes(perm.id)
                             ? "bg-bkash/10 border-bkash text-bkash"
-                            : "bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500"
+                            : "bg-surface-50 dark:bg-surface-800 border-surface-200 dark:border-surface-700 text-surface-500 hover:border-bkash/30"
                         )}
                       >
                         {perm.label}
@@ -4959,13 +5013,13 @@ const UserManagement = () => {
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button 
                     type="button" onClick={() => setIsModalOpen(false)}
-                    className="order-2 sm:order-1 flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl font-bold transition-all"
+                    className="order-2 sm:order-1 flex-1 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 py-3 rounded-xl font-bold transition-all text-surface-600 dark:text-surface-300"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="order-1 sm:order-2 flex-1 bg-bkash hover:bg-bkash/90 py-3 rounded-xl font-bold transition-all text-white"
+                    className="order-1 sm:order-2 flex-1 bg-bkash hover:bg-bkash-dark py-3 rounded-xl font-bold transition-all text-white"
                   >
                     {editingUser ? "Update User" : "Create User"}
                   </button>
@@ -5091,7 +5145,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const isAdminLogin = pathname === "/admin/login";
 
   if (isCheckoutOnly || isAdminLogin) {
-    return <div className="min-h-screen bg-black text-white font-sans selection:bg-bkash/30">{children}</div>;
+    return <div className="min-h-screen bg-surface-50 dark:bg-black text-surface-900 dark:text-surface-50 font-sans selection:bg-bkash/30">{children}</div>;
   }
 
   if (pathname.startsWith("/admin") && !isAdmin) {
@@ -5101,44 +5155,26 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-black text-surface-900 dark:text-surface-50 font-sans selection:bg-bkash/30">
       <SyncManager />
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-900 flex items-center justify-between px-6 z-[60]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-bkash rounded-xl flex items-center justify-center shadow-lg shadow-bkash/20">
-            <CreditCard className="text-white" size={20} />
-          </div>
-          <h1 className="font-black text-lg tracking-tighter">bKash Pay</h1>
-        </div>
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-20 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-900 flex items-center justify-between px-8 z-[60]">
+        <BkashLogo />
         <button 
           onClick={toggleMobileMenu}
-          className="p-2 text-surface-400 hover:text-bkash transition-colors"
+          className="p-3 text-surface-400 hover:text-bkash transition-colors"
         >
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
       </div>
 
       <aside className={cn(
-        "fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-surface-950 border-r border-surface-200 dark:border-surface-900 p-6 flex flex-col gap-8 z-50 transition-transform duration-500 ease-in-out lg:translate-x-0",
+        "fixed left-0 top-0 bottom-0 w-80 bg-white dark:bg-surface-950 border-r border-surface-200 dark:border-surface-900 p-8 flex flex-col gap-10 z-50 transition-transform duration-500 ease-in-out lg:translate-x-0",
         isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
       )}>
-        <div className="hidden lg:flex items-center gap-3 px-2">
-          <div className="w-11 h-11 bg-bkash rounded-2xl flex items-center justify-center shadow-xl shadow-bkash/30 rotate-3 hover:rotate-0 transition-transform duration-300">
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-7 h-7 object-contain" />
-          </div>
-          <div>
-            <h1 className="font-black text-xl leading-none tracking-tighter">bKash Pay</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest">Enterprise</p>
-              <span className={cn(
-                "w-1.5 h-1.5 rounded-full animate-pulse",
-                isOnline ? "bg-emerald-500" : "bg-amber-500"
-              )} />
-            </div>
-          </div>
-        </div>
+        <BkashLogo className="hidden lg:flex" />
 
-        <div className="lg:hidden h-10" />
+        <div className="lg:hidden h-12" />
 
-        <nav className="flex flex-col gap-1.5 flex-1 overflow-y-auto custom-scrollbar pr-2">
+        <nav className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar pr-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-surface-400 px-4 mb-4">Main Menu</div>
           {hasPermission('dashboard') && <SidebarItem icon={LayoutDashboard} label="Dashboard" active={pathname === '/admin'} onClick={() => handleNavClick('/admin')} />}
           {hasPermission('kyc') && <SidebarItem icon={ShieldCheck} label="KYC Verification" active={pathname === '/admin/kyc'} onClick={() => handleNavClick('/admin/kyc')} />}
           {hasPermission('merchants') && <SidebarItem icon={Users} label="Merchants" active={pathname === '/admin/merchants'} onClick={() => handleNavClick('/admin/merchants')} />}
