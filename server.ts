@@ -20,6 +20,21 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 const APP_VERSION = "1.2.0";
+const REPO_URL = "https://github.com/Shawon244345/bkash-pay.git";
+
+async function ensureGitRepo() {
+  try {
+    await execAsync("git status");
+    // If it's a repo, ensure origin is correct
+    await execAsync(`git remote set-url origin ${REPO_URL} || git remote add origin ${REPO_URL}`);
+  } catch (e) {
+    // If not a repo, initialize it
+    await execAsync("git init");
+    await execAsync(`git remote add origin ${REPO_URL}`);
+    await execAsync("git fetch origin");
+    // We don't want to overwrite local changes immediately, so we just set it up
+  }
+}
 
 dotenv.config();
 
@@ -305,6 +320,7 @@ const initDb = async () => {
 };
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Nginx/cPanel)
 const PORT = Number(process.env.PORT) || 3000;
 
 // Security Middleware
@@ -315,7 +331,11 @@ app.use(helmet({
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again after 15 minutes"
+  message: "Too many requests from this IP, please try again after 15 minutes",
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Silence the validation warnings since we've set trust proxy
+  validate: { xForwardedForHeader: false },
 });
 
 app.use("/api/", limiter);
@@ -1645,28 +1665,40 @@ app.get("/api/admin/system/version", authenticateToken, (req, res) => {
 
 app.get("/api/admin/system/check-update", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    // Check if git is available and it's a git repo
-    const { stdout: status } = await execAsync("git status");
-    if (!status) throw new Error("Not a git repository");
-
+    await ensureGitRepo();
+    
     await execAsync("git fetch origin");
-    const { stdout: local } = await execAsync("git rev-parse HEAD");
-    const { stdout: remote } = await execAsync("git rev-parse @{u}");
+    
+    let local = "";
+    try {
+      const { stdout } = await execAsync("git rev-parse HEAD");
+      local = stdout.trim();
+    } catch (e) {
+      // HEAD doesn't exist, likely a fresh repo
+      local = "NONE";
+    }
 
-    if (local.trim() === remote.trim()) {
+    const { stdout: remote } = await execAsync("git rev-parse origin/main || git rev-parse origin/master");
+    const remoteHash = remote.trim();
+
+    if (local === remoteHash) {
       return res.json({ updateAvailable: false, currentVersion: APP_VERSION });
     }
 
-    const { stdout: log } = await execAsync("git log HEAD..@{u} --oneline");
+    const logCmd = local === "NONE" 
+      ? "git log origin/main --oneline || git log origin/master --oneline"
+      : "git log HEAD..origin/main --oneline || git log HEAD..origin/master --oneline";
+    
+    const { stdout: log } = await execAsync(logCmd);
     res.json({ 
       updateAvailable: true, 
       currentVersion: APP_VERSION,
-      latestCommit: remote.trim().slice(0, 7),
+      latestCommit: remoteHash.slice(0, 7),
       changes: log.trim().split('\n')
     });
   } catch (error: any) {
     console.error("Update Check Error:", error);
-    res.status(500).json({ error: "Could not check for updates. Ensure Git is configured correctly." });
+    res.status(500).json({ error: "Could not check for updates. Ensure Git is configured correctly on the server." });
   }
 });
 
