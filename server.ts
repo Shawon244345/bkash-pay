@@ -1203,6 +1203,33 @@ app.get("/api/admin/transactions", authenticateToken, async (req: any, res) => {
   }
 });
 
+app.get("/api/admin/refunds", authenticateToken, async (req: any, res) => {
+  const { merchantId } = req.query;
+  const user = req.user;
+
+  if (user.role === 'merchant' && merchantId && merchantId !== user.merchant_id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+
+  const effectiveMerchantId = user.role === 'merchant' ? user.merchant_id : merchantId;
+
+  try {
+    let query = "SELECT * FROM refunds WHERE 1=1";
+    const params: any[] = [];
+
+    if (effectiveMerchantId) {
+      query += " AND merchant_id = ?";
+      params.push(effectiveMerchantId);
+    }
+
+    query += " ORDER BY refund_execution_time DESC";
+    const refunds = await db.all(query, ...params);
+    res.json(refunds);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch refunds" });
+  }
+});
+
 app.get("/api/admin/settings", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const keys = ["BKASH_APP_KEY", "BKASH_APP_SECRET", "BKASH_USERNAME", "BKASH_PASSWORD", "BKASH_BASE_URL", "APP_URL"];
   const settings: any = {};
@@ -1289,8 +1316,8 @@ app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
     const executionTime = responseData.completedTime || null;
 
     await db.run(`
-      INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, refund_execution_time, response_data, ip_address, initiated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, refund_execution_time, response_data, ip_address, initiated_by, merchant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       uuidv4(),
       refundID,
@@ -1304,7 +1331,8 @@ app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
       executionTime,
       JSON.stringify(responseData),
       ip,
-      initiated_by
+      initiated_by,
+      transaction.merchant_id
     );
 
     if (status === "COMPLETED") {

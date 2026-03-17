@@ -10,31 +10,29 @@ A full-featured, secure, and offline-ready bKash Payment Gateway system designed
 - **System Logs**: Detailed API and system logging for debugging.
 - **Easy Deployment**: Optimized for cPanel Node.js 18.x with a simple `server.js` entry point.
 
-## Installation (cPanel Git Workflow)
+## Installation (Zero-Config Auto-Install)
 
-1. **Clone the Repository**:
-   - Open your cPanel Terminal or SSH.
-   - Run: `git clone https://github.com/yourusername/your-repo-name.git`
-   - Navigate to the folder: `cd your-repo-name`
+This application is designed for **one-click deployment**. You don't even need to run `npm install` manually if you don't want to!
 
-2. **Install & Build**:
-   - Run: `npm install`
-   - *Note: The `postinstall` script will automatically run `npm run build` to compile the frontend and backend.*
+1. **Upload Files**:
+   - Upload the project files (or ZIP) to your cPanel directory (e.g., `public_html/bkash`).
+   - If using Git: `git clone https://github.com/yourusername/your-repo.git`
 
-3. **Setup Node.js App**:
+2. **Setup Node.js App**:
    - Go to **Setup Node.js App** in cPanel.
    - Click **Create Application**.
    - **Node.js version**: Select `18.x` or higher.
    - **Application mode**: `production`.
-   - **Application root**: Path to your folder (e.g., `your-repo-name`).
-   - **Application URL**: Your domain (e.g., `payments.yourdomain.com`).
+   - **Application root**: Path to your folder.
+   - **Application URL**: Your domain (e.g., `bkash.egoluck.com`).
    - **Application startup file**: `server.js`.
    - Click **Create**.
 
-4. **Web Setup Wizard**:
-   - Visit your Application URL in your browser.
-   - You will be automatically redirected to the **Setup Wizard**.
-   - Follow the steps to configure your bKash API credentials and Admin account.
+3. **Visit Site & Auto-Install**:
+   - Simply visit your domain in the browser.
+   - The system will detect missing dependencies and **automatically run `npm install` and `npm run build`** for you.
+   - You will see a "Initializing System" progress page.
+   - Once finished, you'll be redirected to the **Setup Wizard** automatically!
 
 ## Default Credentials
 - **Admin Username**: `admin`

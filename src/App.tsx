@@ -99,8 +99,11 @@ const secureFetch = async (url: string, options: any = {}) => {
   const token = localStorage.getItem("token");
   const headers = {
     ...options.headers,
-    "Content-Type": "application/json",
   };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;

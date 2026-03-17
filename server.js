@@ -1,39 +1,102 @@
 import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+import { existsSync, writeFileSync, readFileSync } from 'fs';
+import { join } from 'path';
+import http from 'http';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = process.env.PORT || 3000;
+const LOCK_FILE = join(process.cwd(), '.installing.lock');
 
-// This is the entry point for cPanel's Node.js app.
-// It starts the real server using tsx.
-// Node 18 (cPanel) uses --loader, Node 20+ uses --import.
+async function runCommand(command, args) {
+  return new Promise((resolve, reject) => {
+    console.log(`Executing: ${command} ${args.join(' ')}`);
+    const child = spawn(command, args, { stdio: 'inherit', shell: true });
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Command ${command} ${args.join(' ')} failed with code ${code}`));
+    });
+  });
+}
 
-const nodeVersion = process.versions.node.split('.')[0];
-const loaderFlag = parseInt(nodeVersion) >= 20 ? '--import' : '--loader';
+async function bootstrap() {
+  if (existsSync(LOCK_FILE)) {
+    console.log('Installation already in progress, waiting...');
+    return;
+  }
 
-console.log(`Starting server with Node ${process.version} using ${loaderFlag} tsx`);
+  try {
+    writeFileSync(LOCK_FILE, Date.now().toString());
 
-const tsxPath = path.join(__dirname, 'node_modules', 'tsx', 'dist', 'loader.mjs');
-const tsxExists = fs.existsSync(tsxPath);
+    if (!existsSync(join(process.cwd(), 'node_modules'))) {
+      console.log('node_modules not found. Installing dependencies...');
+      await runCommand('npm', ['install']);
+    }
 
-const args = [loaderFlag, 'tsx', 'server.ts'];
+    if (!existsSync(join(process.cwd(), 'dist/server.js'))) {
+      console.log('dist/server.js not found. Building application...');
+      await runCommand('npm', ['run', 'build']);
+    }
 
-// If we are on Node 18 and using --loader, we might need the full path to the loader in some environments
-// but usually 'tsx' works if it's in node_modules.
+    console.log('Application is ready.');
+  } catch (err) {
+    console.error('Bootstrap error:', err);
+    throw err;
+  } finally {
+    if (existsSync(LOCK_FILE)) {
+      try {
+        const { unlinkSync } = await import('fs');
+        unlinkSync(LOCK_FILE);
+      } catch (e) {}
+    }
+  }
+}
 
-const child = spawn('node', args, {
-  cwd: __dirname,
-  stdio: 'inherit',
-  env: { ...process.env, NODE_ENV: 'production' }
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(`
+    <html>
+      <head>
+        <title>Setting up bKash Gateway...</title>
+        <meta http-equiv="refresh" content="10">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; color: #111827; }
+          .card { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); text-align: center; max-width: 400px; width: 100%; }
+          .spinner { border: 3px solid #e5e7eb; border-left-color: #d1126d; border-radius: 50%; width: 48px; height: 48px; animation: spin 1s linear infinite; margin: 0 auto 1.5rem; }
+          h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; color: #d1126d; }
+          p { color: #4b5563; line-height: 1.5; margin-bottom: 1rem; }
+          .status { font-size: 0.875rem; color: #9ca3af; font-style: italic; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="spinner"></div>
+          <h1>Initializing System</h1>
+          <p>We are setting up your bKash Payment Gateway. This includes installing dependencies and building the frontend.</p>
+          <p class="status">Please do not close this window. We will redirect you once ready.</p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
-child.on('close', (code) => {
-  console.log(`Server process exited with code ${code}`);
-  process.exit(code || 0);
-});
+const startApp = async () => {
+  try {
+    await bootstrap();
+    console.log('Starting the main application...');
+    server.close(() => {
+      import('./dist/server.js').catch(err => {
+        console.error('Failed to start main app:', err);
+        process.exit(1);
+      });
+    });
+  } catch (err) {
+    console.error('Critical bootstrap failure:', err);
+    // Keep the status server running so the user sees the error? 
+    // Or just exit.
+  }
+};
 
-child.on('error', (err) => {
-  console.error('Failed to start server process:', err);
-  process.exit(1);
+server.listen(PORT, () => {
+  console.log(`Bootstrapper active on port ${PORT}`);
+  startApp();
 });
