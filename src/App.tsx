@@ -5481,12 +5481,13 @@ export default function App() {
   useEffect(() => {
     const checkInstallation = async () => {
       try {
-        const response = await secureFetch("/api/install/status");
+        const response = await fetch("/api/install/status");
         const data = await response.json();
         setIsInstalled(data.installed);
       } catch (error) {
         console.error("Failed to check installation status", error);
-        setIsInstalled(true);
+        // If we can't check, assume not installed to be safe
+        setIsInstalled(false);
       }
     };
     checkInstallation();
