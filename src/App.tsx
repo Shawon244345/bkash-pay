@@ -401,12 +401,32 @@ const Dashboard = () => {
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-bkash" size={40} /></div>;
 
+  const merchantId = localStorage.getItem("merchant_id");
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-10"
     >
+      {merchantId && (
+        <div className="bg-bkash/5 border border-bkash/10 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h3 className="text-sm font-black text-bkash uppercase tracking-widest">Merchant ID</h3>
+            <p className="text-xs text-surface-500 font-mono mt-1">{merchantId}</p>
+          </div>
+          <button 
+            onClick={() => {
+              navigator.clipboard.writeText(merchantId);
+              toast.success("Merchant ID copied!");
+            }}
+            className="flex items-center gap-2 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 px-4 py-2 rounded-xl text-xs font-bold hover:border-bkash transition-all"
+          >
+            <Copy size={14} /> Copy ID
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Volume" value={formatCurrency(stats?.totalVolume || 0)} icon={TrendingUp} trend={12.5} color="bg-bkash" />
         <StatCard title="Success Payments" value={stats?.successCount || 0} icon={CheckCircle2} trend={8.2} color="bg-emerald-500" />
@@ -3053,6 +3073,7 @@ const MerchantManagement = () => {
                       <div>
                         <div className="text-sm font-black text-surface-900 dark:text-white tracking-tight">{m.name}</div>
                         <div className="text-[10px] text-surface-500 font-bold uppercase tracking-widest mt-0.5">{m.email}</div>
+                        <div className="text-[9px] text-surface-400 font-mono mt-1">ID: {m.id}</div>
                         <div className="mt-2 flex gap-2">
                           <span className="text-[9px] bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded-lg text-surface-500 font-black uppercase tracking-tighter border border-surface-200 dark:border-surface-700">{m.payment_mode} API</span>
                         </div>
@@ -4146,6 +4167,7 @@ const UserProfile = () => {
   const [isUpdatingCreds, setIsUpdatingCreds] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const merchantId = localStorage.getItem("merchant_id");
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4293,6 +4315,29 @@ const UserProfile = () => {
                   placeholder="https://example.com/avatar.jpg"
                 />
               </div>
+              {merchantId && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Merchant ID</label>
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      disabled
+                      value={merchantId}
+                      className="input-field py-3 bg-surface-50 dark:bg-surface-950 font-mono text-xs"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(merchantId);
+                        toast.success("Merchant ID copied!");
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-surface-200 dark:hover:bg-surface-800 rounded-lg transition-all"
+                    >
+                      <Copy size={14} className="text-surface-500" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {isEditing && (
