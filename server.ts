@@ -225,6 +225,13 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+    CREATE TABLE IF NOT EXISTS system_versions (
+      id TEXT PRIMARY KEY,
+      version_name TEXT,
+      settings_snapshot TEXT,
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Migration for users table to ensure all columns exist
@@ -468,6 +475,84 @@ app.get("/api/admin/security/logins", authenticateToken, async (req, res) => {
     res.json(logins);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch login history" });
+  }
+});
+
+// System Versioning API
+app.get("/api/admin/system/versions", authenticateToken, async (req, res) => {
+  try {
+    const versions = await db.all("SELECT * FROM system_versions ORDER BY created_at DESC");
+    res.json(versions);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch system versions" });
+  }
+});
+
+app.post("/api/admin/system/versions", authenticateToken, async (req, res) => {
+  const { name } = req.body;
+  try {
+    const settings = await db.all("SELECT * FROM settings");
+    const snapshot = JSON.stringify(settings);
+    const id = uuidv4();
+    await db.run(
+      "INSERT INTO system_versions (id, version_name, settings_snapshot, created_by) VALUES (?, ?, ?, ?)",
+      id, name || `Version ${new Date().toLocaleString()}`, snapshot, (req as any).user.username
+    );
+    await auditLog("SYSTEM_VERSION_CREATE", (req as any).user.username, { id, name });
+    res.json({ success: true, id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create system version" });
+  }
+});
+
+app.post("/api/admin/system/versions/:id/restore", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const version = await db.get("SELECT * FROM system_versions WHERE id = ?", id);
+    if (!version) return res.status(404).json({ error: "Version not found" });
+
+    const settings = JSON.parse(version.settings_snapshot);
+    
+    // Begin transaction for safety
+    await db.run("BEGIN TRANSACTION");
+    try {
+      // We don't delete all settings, we update/insert from snapshot
+      for (const s of settings) {
+        await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
+      }
+      await db.run("COMMIT");
+      await auditLog("SYSTEM_VERSION_RESTORE", (req as any).user.username, { id, name: version.version_name });
+      res.json({ success: true });
+    } catch (e) {
+      await db.run("ROLLBACK");
+      throw e;
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Failed to restore system version" });
+  }
+});
+
+app.delete("/api/admin/system/versions/:id", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.run("DELETE FROM system_versions WHERE id = ?", id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete system version" });
+  }
+});
+
+app.get("/api/admin/system/git-log", authenticateToken, async (req, res) => {
+  try {
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
+    
+    const { stdout } = await execAsync('git log -n 10 --pretty=format:"%h - %an, %ar : %s"');
+    const logs = stdout.split("\n").filter(Boolean);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch git logs" });
   }
 });
 

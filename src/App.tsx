@@ -1456,6 +1456,174 @@ const AuditLogsPage = () => {
   );
 };
 
+const SystemVersions = () => {
+  const [versions, setVersions] = useState<any[]>([]);
+  const [gitLogs, setGitLogs] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newVersionName, setNewVersionName] = useState("");
+  const [activeTab, setActiveTab] = useState<'snapshots' | 'git'>('snapshots');
+
+  const fetchData = async () => {
+    try {
+      const [versionsRes, gitRes] = await Promise.all([
+        secureFetch("/api/admin/system/versions"),
+        secureFetch("/api/admin/system/git-log")
+      ]);
+      if (versionsRes.ok) setVersions(await versionsRes.json());
+      if (gitRes.ok) setGitLogs(await gitRes.json());
+    } catch (err) {
+      toast.error("Failed to fetch history");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const createVersion = async () => {
+    setIsCreating(true);
+    try {
+      const res = await secureFetch("/api/admin/system/versions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newVersionName })
+      });
+      if (res.ok) {
+        toast.success("System version created successfully");
+        setNewVersionName("");
+        fetchData();
+      }
+    } catch (err) {
+      toast.error("Failed to create version");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const restoreVersion = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to restore to version "${name}"? This will overwrite current settings.`)) return;
+    
+    try {
+      const res = await secureFetch(`/api/admin/system/versions/${id}/restore`, { method: "POST" });
+      if (res.ok) {
+        toast.success("System restored successfully. Reloading...");
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } catch (err) {
+      toast.error("Failed to restore version");
+    }
+  };
+
+  const deleteVersion = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this version?")) return;
+    try {
+      const res = await secureFetch(`/api/admin/system/versions/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Version deleted");
+        fetchData();
+      }
+    } catch (err) {
+      toast.error("Failed to delete version");
+    }
+  };
+
+  if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-bkash" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-surface-100 dark:border-surface-800 mb-6">
+        <button 
+          onClick={() => setActiveTab('snapshots')}
+          className={cn(
+            "px-6 py-3 text-sm font-bold transition-all border-b-2",
+            activeTab === 'snapshots' ? "border-bkash text-bkash" : "border-transparent text-surface-400 hover:text-surface-600"
+          )}
+        >
+          System Snapshots
+        </button>
+        <button 
+          onClick={() => setActiveTab('git')}
+          className={cn(
+            "px-6 py-3 text-sm font-bold transition-all border-b-2",
+            activeTab === 'git' ? "border-bkash text-bkash" : "border-transparent text-surface-400 hover:text-surface-600"
+          )}
+        >
+          Git History
+        </button>
+      </div>
+
+      {activeTab === 'snapshots' ? (
+        <>
+          <div className="flex gap-4">
+            <input 
+              type="text" 
+              placeholder="Version Name (e.g. Before Update)" 
+              value={newVersionName}
+              onChange={(e) => setNewVersionName(e.target.value)}
+              className="input-field flex-1"
+            />
+            <button 
+              onClick={createVersion}
+              disabled={isCreating}
+              className="btn-primary whitespace-nowrap"
+            >
+              {isCreating ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} className="mr-2 inline" />}
+              Create Snapshot
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {versions.length === 0 ? (
+              <p className="text-center text-surface-500 py-8">No system versions found.</p>
+            ) : (
+              versions.map((v) => (
+                <div key={v.id} className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-950 border border-surface-100 dark:border-surface-800 rounded-2xl">
+                  <div>
+                    <h4 className="font-bold text-surface-900 dark:text-white">{v.version_name}</h4>
+                    <p className="text-xs text-surface-500">Created by {v.created_by} on {new Date(v.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => restoreVersion(v.id, v.version_name)}
+                      className="p-2 text-bkash hover:bg-bkash/10 rounded-lg transition-colors"
+                      title="Restore this version"
+                    >
+                      <RotateCcw size={18} />
+                    </button>
+                    <button 
+                      onClick={() => deleteVersion(v.id)}
+                      className="p-2 text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="Delete version"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="space-y-4">
+          {gitLogs.length === 0 ? (
+            <p className="text-center text-surface-500 py-8">No git history found.</p>
+          ) : (
+            gitLogs.map((log, i) => (
+              <div key={i} className="p-4 bg-surface-50 dark:bg-surface-950 border border-surface-100 dark:border-surface-800 rounded-2xl">
+                <p className="text-sm font-mono text-surface-900 dark:text-white">{log}</p>
+              </div>
+            ))
+          )}
+          <p className="text-[10px] text-surface-400 text-center mt-4 italic">Showing last 10 commits. Use the "System Update" tool to pull the latest changes.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>({});
   const [merchantSettings, setMerchantSettings] = useState<any>(null);
@@ -1894,6 +2062,17 @@ const SettingsPage = () => {
                 </ul>
               </motion.div>
             )}
+
+            <div className="mt-12 pt-8 border-t border-surface-100 dark:border-surface-800">
+              <div className="flex items-center gap-3 mb-6">
+                <History className="text-bkash" size={20} />
+                <div>
+                  <h4 className="text-lg font-bold text-surface-900 dark:text-white">System Version History</h4>
+                  <p className="text-xs text-surface-500">Create and restore snapshots of your system configuration.</p>
+                </div>
+              </div>
+              <SystemVersions />
+            </div>
           </div>
         )}
       </div>
