@@ -215,6 +215,16 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (merchant_id) REFERENCES merchants(id)
     );
+    CREATE TABLE IF NOT EXISTS login_history (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      username TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      status TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
   `);
 
   // Migration for users table to ensure all columns exist
@@ -422,6 +432,45 @@ if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.resolve(process.cwd(), "dist")));
 }
 
+// Security API
+app.get("/api/admin/security/settings", authenticateToken, async (req, res) => {
+  try {
+    const twoFactor = await getSetting("SECURITY_2FA_ENABLED", "false");
+    const ipWhitelisting = await getSetting("SECURITY_IP_WHITELISTING_ENABLED", "false");
+    res.json({
+      twoFactor: twoFactor === "true",
+      ipWhitelisting: ipWhitelisting === "true"
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch security settings" });
+  }
+});
+
+app.post("/api/admin/security/settings", authenticateToken, async (req, res) => {
+  const { twoFactor, ipWhitelisting } = req.body;
+  try {
+    if (twoFactor !== undefined) {
+      await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "SECURITY_2FA_ENABLED", String(twoFactor));
+    }
+    if (ipWhitelisting !== undefined) {
+      await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "SECURITY_IP_WHITELISTING_ENABLED", String(ipWhitelisting));
+    }
+    await auditLog("SECURITY_SETTINGS_UPDATE", (req as any).user.username, { twoFactor, ipWhitelisting });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update security settings" });
+  }
+});
+
+app.get("/api/admin/security/logins", authenticateToken, async (req, res) => {
+  try {
+    const logins = await db.all("SELECT * FROM login_history ORDER BY created_at DESC LIMIT 10");
+    res.json(logins);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch login history" });
+  }
+});
+
 // bKash Helpers
 const getSetting = async (key: string, defaultValue: string = "") => {
   // Prefer environment variables for easier configuration on platforms like Vercel
@@ -594,6 +643,12 @@ app.post("/api/admin/login", async (req, res) => {
       }
 
       const token = generateToken(user);
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      await db.run(
+        "INSERT INTO login_history (id, user_id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?, ?)",
+        uuidv4(), user.id, user.username, ip, userAgent, "SUCCESS"
+      );
       await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
       res.json({ 
         success: true, 
@@ -610,6 +665,12 @@ app.post("/api/admin/login", async (req, res) => {
         }
       });
     } else {
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      await db.run(
+        "INSERT INTO login_history (id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?)",
+        uuidv4(), username, ip, userAgent, "FAILED"
+      );
       await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
       res.status(401).json({ error: "Invalid credentials" });
     }

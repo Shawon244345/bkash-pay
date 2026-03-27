@@ -4667,58 +4667,125 @@ const Statements = () => {
   );
 };
 
-const Security = () => (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
-          <ShieldCheck className="text-bkash" />
-          Security Overview
-        </h3>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
-            <div>
-              <p className="font-bold text-surface-900 dark:text-white">Two-Factor Authentication</p>
-              <p className="text-xs text-surface-500">Add an extra layer of security</p>
-            </div>
-            <div className="w-12 h-6 bg-bkash rounded-full relative">
-              <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
-            </div>
-          </div>
-          <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
-            <div>
-              <p className="font-bold text-surface-900 dark:text-white">IP Whitelisting</p>
-              <p className="text-xs text-surface-500">Restrict access to specific IPs</p>
-            </div>
-            <div className="w-12 h-6 bg-surface-200 dark:bg-surface-700 rounded-full relative">
-              <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
-            </div>
-          </div>
-        </div>
+const Security = () => {
+  const [settings, setSettings] = useState({ twoFactor: false, ipWhitelisting: false });
+  const [logins, setLogins] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [settingsRes, loginsRes] = await Promise.all([
+          secureFetch("/api/admin/security/settings"),
+          secureFetch("/api/admin/security/logins")
+        ]);
+        if (settingsRes.ok) setSettings(await settingsRes.json());
+        if (loginsRes.ok) setLogins(await loginsRes.json());
+      } catch (error) {
+        console.error("Failed to fetch security data", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const toggleSetting = async (key: 'twoFactor' | 'ipWhitelisting') => {
+    const newValue = !settings[key];
+    const updatedSettings = { ...settings, [key]: newValue };
+    setSettings(updatedSettings);
+    
+    try {
+      const res = await secureFetch("/api/admin/security/settings", {
+        method: "POST",
+        body: JSON.stringify({ [key]: newValue })
+      });
+      if (!res.ok) throw new Error("Failed to update setting");
+      toast.success(`${key === 'twoFactor' ? 'Two-Factor Authentication' : 'IP Whitelisting'} ${newValue ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      setSettings(settings); // Rollback
+      toast.error("Failed to update security setting");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-bkash" size={32} />
       </div>
-      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
-        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
-          <Activity className="text-bkash" />
-          Recent Logins
-        </h3>
-        <div className="space-y-4">
-          {[
-            { device: "Chrome / Windows", ip: "103.120.2.45", time: "Just now" },
-            { device: "Safari / iPhone", ip: "192.168.1.1", time: "2 hours ago" },
-          ].map((l, i) => (
-            <div key={i} className="flex justify-between items-center p-3 border-b border-surface-100 dark:border-surface-800 last:border-0">
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+          <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
+            <ShieldCheck className="text-bkash" />
+            Security Overview
+          </h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
               <div>
-                <p className="text-sm font-bold text-surface-900 dark:text-white">{l.device}</p>
-                <p className="text-[10px] text-surface-500">{l.ip}</p>
+                <p className="font-bold text-surface-900 dark:text-white">Two-Factor Authentication</p>
+                <p className="text-xs text-surface-500">Add an extra layer of security</p>
               </div>
-              <p className="text-[10px] text-surface-500">{l.time}</p>
+              <button 
+                onClick={() => toggleSetting('twoFactor')}
+                className={cn(
+                  "w-12 h-6 rounded-full relative transition-colors duration-300",
+                  settings.twoFactor ? "bg-bkash" : "bg-surface-200 dark:bg-surface-700"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300",
+                  settings.twoFactor ? "right-1" : "left-1"
+                )} />
+              </button>
             </div>
-          ))}
+            <div className="flex justify-between items-center p-4 bg-surface-50 dark:bg-surface-950 rounded-xl border border-surface-100 dark:border-surface-800">
+              <div>
+                <p className="font-bold text-surface-900 dark:text-white">IP Whitelisting</p>
+                <p className="text-xs text-surface-500">Restrict access to specific IPs</p>
+              </div>
+              <button 
+                onClick={() => toggleSetting('ipWhitelisting')}
+                className={cn(
+                  "w-12 h-6 rounded-full relative transition-colors duration-300",
+                  settings.ipWhitelisting ? "bg-bkash" : "bg-surface-200 dark:bg-surface-700"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300",
+                  settings.ipWhitelisting ? "right-1" : "left-1"
+                )} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
+          <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-surface-900 dark:text-white">
+            <Activity className="text-bkash" />
+            Recent Logins
+          </h3>
+          <div className="space-y-4">
+            {logins.length > 0 ? logins.map((l, i) => (
+              <div key={i} className="flex justify-between items-center p-3 border-b border-surface-100 dark:border-surface-800 last:border-0">
+                <div>
+                  <p className="text-sm font-bold text-surface-900 dark:text-white">{l.username}</p>
+                  <p className="text-[10px] text-surface-500">{l.ip_address} • {l.status}</p>
+                </div>
+                <p className="text-[10px] text-surface-500">{new Date(l.created_at).toLocaleString()}</p>
+              </div>
+            )) : (
+              <p className="text-center text-surface-500 py-4">No recent logins found</p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 const NotificationBar = () => {
   const [notifications, setNotifications] = useState([
