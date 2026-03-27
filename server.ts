@@ -80,25 +80,26 @@ const auditLog = async (action: string, user: string, details: any) => {
 };
 
 const initDb = async () => {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      payment_id TEXT,
-      trx_id TEXT,
-      amount REAL,
-      status TEXT,
-      customer_msisdn TEXT,
-      merchant_invoice TEXT,
-      merchant_id TEXT,
-      payment_mode TEXT DEFAULT 'GLOBAL',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        payment_id TEXT,
+        trx_id TEXT,
+        amount REAL,
+        status TEXT,
+        customer_msisdn TEXT,
+        merchant_invoice TEXT,
+        merchant_id TEXT,
+        payment_mode TEXT DEFAULT 'GLOBAL',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+  
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
 
     CREATE TABLE IF NOT EXISTS refunds (
       id TEXT PRIMARY KEY,
@@ -233,6 +234,9 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  } catch (error) {
+    console.error("Database initialization error:", error);
+  }
 
   // Migration for users table to ensure all columns exist
   try { await db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (e) {}
@@ -542,17 +546,79 @@ app.delete("/api/admin/system/versions/:id", authenticateToken, async (req, res)
   }
 });
 
-app.get("/api/admin/system/git-log", authenticateToken, async (req, res) => {
+app.get("/api/admin/system/git-log", authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { exec } = await import("child_process");
     const { promisify } = await import("util");
     const execAsync = promisify(exec);
     
-    const { stdout } = await execAsync('git log -n 10 --pretty=format:"%h - %an, %ar : %s"');
-    const logs = stdout.split("\n").filter(Boolean);
+    const { stdout } = await execAsync('git log -n 20 --pretty=format:"%h|%an|%ar|%s"');
+    const logs = stdout.split("\n").filter(Boolean).map(line => {
+      const [hash, author, date, message] = line.split("|");
+      return { hash, author, date, message };
+    });
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch git logs" });
+  }
+});
+
+app.post("/api/admin/system/git-checkout", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  const { hash } = req.body;
+  if (!hash) return res.status(400).json({ error: "Commit hash is required" });
+  
+  try {
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
+    
+    await execAsync(`git checkout -f ${hash}`);
+    res.json({ success: true, message: `Checked out to ${hash}. Restarting server...` });
+    setTimeout(() => process.exit(0), 1000);
+  } catch (error) {
+    console.error("Checkout error:", error);
+    res.status(500).json({ error: "Failed to checkout commit: " + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
+app.get("/api/admin/system/diagnostics", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
+    
+    const results: any = {};
+    
+    try {
+      const { stdout } = await execAsync("git --version");
+      results.gitVersion = stdout.trim();
+    } catch (e: any) {
+      results.gitVersion = "Error: " + e.message;
+    }
+    
+    try {
+      const { stdout } = await execAsync("git remote -v");
+      results.gitRemote = stdout.trim();
+    } catch (e: any) {
+      results.gitRemote = "Error: " + e.message;
+    }
+    
+    try {
+      const { stdout } = await execAsync("git status");
+      results.gitStatus = stdout.trim();
+    } catch (e: any) {
+      results.gitStatus = "Error: " + e.message;
+    }
+    
+    results.nodeVersion = process.version;
+    results.cwd = process.cwd();
+    results.env = process.env.NODE_ENV;
+    results.distExists = fs.existsSync(path.join(process.cwd(), "dist"));
+    results.serverJsExists = fs.existsSync(path.join(process.cwd(), "dist", "server.js"));
+    
+    res.json(results);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -728,8 +794,8 @@ app.post("/api/admin/login", async (req, res) => {
       }
 
       const token = generateToken(user);
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      const userAgent = req.headers['user-agent'];
+      const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
+      const userAgent = req.headers['user-agent'] || "unknown";
       await db.run(
         "INSERT INTO login_history (id, user_id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?, ?)",
         uuidv4(), user.id, user.username, ip, userAgent, "SUCCESS"
@@ -746,12 +812,12 @@ app.post("/api/admin/login", async (req, res) => {
           avatar: user.avatar,
           merchant_id: user.merchant_id,
           merchant: merchant,
-          permissions: user.permissions.split(",")
+          permissions: (user.permissions || "").split(",").filter(Boolean)
         }
       });
     } else {
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      const userAgent = req.headers['user-agent'];
+      const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
+      const userAgent = req.headers['user-agent'] || "unknown";
       await db.run(
         "INSERT INTO login_history (id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?)",
         uuidv4(), username, ip, userAgent, "FAILED"
@@ -1777,33 +1843,75 @@ app.get("/api/admin/system/check-update", authenticateToken, authorizeRole(['adm
 });
 
 app.post("/api/admin/system/update", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  const logFile = path.join(process.cwd(), "update.log");
+  const appendLog = (msg: string) => {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+  };
+
   try {
+    if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
+    appendLog("System update started...");
+    
     await auditLog("SYSTEM_UPDATE_STARTED", (req as any).user.username, {});
     
     // 0. Ensure git is ready
+    appendLog("Ensuring git repository...");
     await ensureGitRepo();
     
     // 1. Fetch and Reset to latest remote commit (force sync)
+    appendLog("Fetching from origin...");
     await execAsync("git fetch origin");
-    await execAsync("git reset --hard origin/main || git reset --hard origin/master");
+    
+    appendLog("Resetting to latest commit...");
+    // Try main first, then master
+    try {
+      await execAsync("git reset --hard origin/main");
+      appendLog("Reset to origin/main successful.");
+    } catch (e) {
+      appendLog("origin/main failed, trying origin/master...");
+      await execAsync("git reset --hard origin/master");
+      appendLog("Reset to origin/master successful.");
+    }
     
     // 2. Install dependencies
+    appendLog("Installing dependencies (this may take a while)...");
     await execAsync("npm install --no-audit --no-fund --prefer-offline");
+    appendLog("Dependencies installed successfully.");
     
     // 3. Build application
+    appendLog("Building application...");
     await execAsync("npm run build");
+    appendLog("Build completed successfully.");
 
     await auditLog("SYSTEM_UPDATE_COMPLETED", (req as any).user.username, {});
+    appendLog("Update process finished successfully. Restarting server...");
     
     res.json({ success: true, message: "Update completed. System will restart shortly." });
 
-    // Graceful restart (process manager like PM2 or our bootstrapper will handle this)
+    // Graceful restart
     setTimeout(() => {
       process.exit(0);
     }, 2000);
   } catch (error: any) {
     console.error("System Update Error:", error);
-    res.status(500).json({ error: "Update failed: " + error.message });
+    appendLog(`ERROR: ${error.message}`);
+    if (error.stderr) appendLog(`STDERR: ${error.stderr}`);
+    
+    res.status(500).json({ 
+      error: "Update failed. Check update.log for details.", 
+      details: error.message 
+    });
+  }
+});
+
+app.get("/api/admin/system/update-log", authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  const logFile = path.join(process.cwd(), "update.log");
+  if (fs.existsSync(logFile)) {
+    const content = fs.readFileSync(logFile, "utf8");
+    res.send(content);
+  } else {
+    res.send("No update log found.");
   }
 });
 

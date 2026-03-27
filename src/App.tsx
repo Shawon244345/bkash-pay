@@ -1458,9 +1458,10 @@ const AuditLogsPage = () => {
 
 const SystemVersions = () => {
   const [versions, setVersions] = useState<any[]>([]);
-  const [gitLogs, setGitLogs] = useState<string[]>([]);
+  const [gitLogs, setGitLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState<string | null>(null);
   const [newVersionName, setNewVersionName] = useState("");
   const [activeTab, setActiveTab] = useState<'snapshots' | 'git'>('snapshots');
 
@@ -1514,6 +1515,30 @@ const SystemVersions = () => {
       }
     } catch (err) {
       toast.error("Failed to restore version");
+    }
+  };
+
+  const checkoutCommit = async (hash: string) => {
+    if (!window.confirm(`Are you sure you want to checkout to commit ${hash}? The server will restart.`)) return;
+    
+    setIsCheckingOut(hash);
+    try {
+      const res = await secureFetch("/api/admin/system/git-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hash })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        setTimeout(() => window.location.reload(), 5000);
+      } else {
+        toast.error(data.error || "Checkout failed");
+      }
+    } catch (err) {
+      toast.error("Checkout failed");
+    } finally {
+      setIsCheckingOut(null);
     }
   };
 
@@ -1612,12 +1637,28 @@ const SystemVersions = () => {
             <p className="text-center text-surface-500 py-8">No git history found.</p>
           ) : (
             gitLogs.map((log, i) => (
-              <div key={i} className="p-4 bg-surface-50 dark:bg-surface-950 border border-surface-100 dark:border-surface-800 rounded-2xl">
-                <p className="text-sm font-mono text-surface-900 dark:text-white">{log}</p>
+              <div key={i} className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-950 border border-surface-100 dark:border-surface-800 rounded-2xl">
+                <div className="flex-1 min-w-0 mr-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-surface-200 dark:bg-surface-800 text-surface-600 dark:text-surface-400 rounded font-mono text-[10px]">{log.hash}</span>
+                    <span className="text-xs text-surface-500">{log.date}</span>
+                  </div>
+                  <p className="text-sm font-medium text-surface-900 dark:text-white truncate">{log.message}</p>
+                  <p className="text-[10px] text-surface-400">by {log.author}</p>
+                </div>
+                <button 
+                  onClick={() => checkoutCommit(log.hash)}
+                  disabled={isCheckingOut === log.hash}
+                  className="p-2 text-bkash hover:bg-bkash/10 rounded-lg transition-colors flex items-center gap-2"
+                  title="Checkout this version"
+                >
+                  {isCheckingOut === log.hash ? <Loader2 className="animate-spin" size={18} /> : <RotateCcw size={18} />}
+                  <span className="text-xs font-bold hidden sm:inline">Restore</span>
+                </button>
               </div>
             ))
           )}
-          <p className="text-[10px] text-surface-400 text-center mt-4 italic">Showing last 10 commits. Use the "System Update" tool to pull the latest changes.</p>
+          <p className="text-[10px] text-surface-400 text-center mt-4 italic">Showing last 20 commits. Use the "System Update" tool to pull the latest changes.</p>
         </div>
       )}
     </div>
@@ -2028,6 +2069,23 @@ const SettingsPage = () => {
                       {isUpdating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
                       Confirm Update
                     </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/admin/system/update-log", {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                          });
+                          const text = await res.text();
+                          alert(text);
+                        } catch (e: any) {
+                          alert("Failed to fetch log: " + e.message);
+                        }
+                      }}
+                      className="p-2.5 bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-700 transition-all"
+                      title="View Update Log"
+                    >
+                      <FileText size={16} />
+                    </button>
                   </div>
                 ) : (
                   <button
@@ -2039,6 +2097,20 @@ const SettingsPage = () => {
                     Check for Updates
                   </button>
                 )}
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await secureFetch("/api/admin/system/diagnostics");
+                      alert(JSON.stringify(res, null, 2));
+                    } catch (e: any) {
+                      alert("Failed to fetch diagnostics: " + e.message);
+                    }
+                  }}
+                  className="p-2.5 bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-700 transition-all"
+                  title="Run Diagnostics"
+                >
+                  <RefreshCcw size={16} />
+                </button>
               </div>
             </div>
 
@@ -4854,17 +4926,20 @@ const Security = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [settingsRes, loginsRes] = await Promise.all([
-          secureFetch("/api/admin/security/settings"),
-          secureFetch("/api/admin/security/logins")
-        ]);
+        const settingsRes = await secureFetch("/api/admin/security/settings");
         if (settingsRes.ok) setSettings(await settingsRes.json());
-        if (loginsRes.ok) setLogins(await loginsRes.json());
-      } catch (error) {
-        console.error("Failed to fetch security data", error);
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.error("Failed to fetch settings", e);
       }
+
+      try {
+        const loginsRes = await secureFetch("/api/admin/security/logins");
+        if (loginsRes.ok) setLogins(await loginsRes.json());
+      } catch (e) {
+        console.error("Failed to fetch logins", e);
+      }
+      
+      setLoading(false);
     };
     fetchData();
   }, []);
@@ -5569,7 +5644,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         };
         
         const requiredPerm = routeToPerm[currentRoute];
-        if (requiredPerm && !permissions.includes(requiredPerm)) {
+        if (requiredPerm && userRole !== 'admin' && !permissions.includes(requiredPerm)) {
           toast.error("You don't have permission to access this page");
           navigate("/admin");
         }
