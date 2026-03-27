@@ -42,7 +42,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Database Setup
-const dbPath = path.join(__dirname, "payments.db");
+const dbPath = path.join(process.cwd(), "payments.db");
 const dbRaw = new sqlite3.Database(dbPath);
 
 const db = {
@@ -60,14 +60,9 @@ const db = {
   })
 };
 
-// Installer Logic
-const checkInstalled = () => {
-  return fs.existsSync(path.join(__dirname, ".installed"));
-};
-
 const logToFile = async (message: string, data: any, level: string = "INFO") => {
   const logEntry = `[${new Date().toISOString()}] ${message}: ${JSON.stringify(data, null, 2)}\n`;
-  fs.appendFileSync(path.join(__dirname, "debug.log"), logEntry);
+  fs.appendFileSync(path.join(process.cwd(), "debug.log"), logEntry);
   
   try {
     await db.run("INSERT INTO logs (id, level, message, details) VALUES (?, ?, ?, ?)", uuidv4(), level, message, JSON.stringify(data));
@@ -319,7 +314,7 @@ const initDb = async () => {
   }
 };
 
-const app = express();
+export const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Nginx/cPanel)
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -387,7 +382,7 @@ console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode on
 // Multer Setup for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, "uploads");
+    const uploadDir = path.join(process.cwd(), "uploads");
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -405,7 +400,7 @@ const upload = multer({
 });
 
 app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Vite setup for development
 let vite: any;
@@ -424,82 +419,15 @@ if (process.env.NODE_ENV !== "production") {
 
 // Static fallback for production
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.resolve(__dirname, "dist")));
+  app.use(express.static(path.resolve(process.cwd(), "dist")));
 }
-
-// Installer API
-app.get("/api/install/status", (req, res) => {
-  res.json({ installed: checkInstalled() });
-});
-
-app.post("/api/install", async (req, res) => {
-  if (checkInstalled()) {
-    return res.status(400).json({ error: "Application already installed" });
-  }
-
-  const { 
-    BKASH_APP_KEY, 
-    BKASH_APP_SECRET, 
-    BKASH_USERNAME, 
-    BKASH_PASSWORD, 
-    BKASH_BASE_URL,
-    APP_URL,
-    ADMIN_USERNAME,
-    ADMIN_PASSWORD
-  } = req.body;
-
-  try {
-    // Initialize DB
-    await initDb();
-
-    // Update settings with provided values
-    const settings = [
-      { key: 'BKASH_APP_KEY', value: BKASH_APP_KEY },
-      { key: 'BKASH_APP_SECRET', value: BKASH_APP_SECRET },
-      { key: 'BKASH_USERNAME', value: BKASH_USERNAME },
-      { key: 'BKASH_PASSWORD', value: BKASH_PASSWORD },
-      { key: 'BKASH_BASE_URL', value: BKASH_BASE_URL },
-      { key: 'APP_URL', value: APP_URL },
-      { key: 'ADMIN_USERNAME', value: ADMIN_USERNAME },
-      { key: 'ADMIN_PASSWORD', value: ADMIN_PASSWORD }
-    ];
-
-    for (const s of settings) {
-      if (s.value) {
-        await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
-      }
-    }
-
-    // Update admin user if credentials changed
-    if (ADMIN_USERNAME && ADMIN_PASSWORD) {
-      const hashedPassword = await hashPassword(ADMIN_PASSWORD);
-      const allPermissions = "dashboard,transactions,search,refunds,logs,audit-logs,settings,profile,analytics,customers,security,user-management,statements,withdrawals,subscriptions";
-      await db.run("DELETE FROM users WHERE role = 'admin'");
-      await db.run(
-        "INSERT INTO users (id, username, email, password, role, permissions) VALUES (?, ?, ?, ?, ?, ?)",
-        uuidv4(),
-        ADMIN_USERNAME,
-        "admin@bkash-pay.com",
-        hashedPassword,
-        "admin",
-        allPermissions
-      );
-    }
-
-    // Create .installed file
-    fs.writeFileSync(path.join(__dirname, ".installed"), "true");
-
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error("Installation Error:", error);
-    res.status(500).json({ error: "Installation failed: " + error.message });
-  }
-});
 
 // bKash Helpers
 const getSetting = async (key: string, defaultValue: string = "") => {
+  // Prefer environment variables for easier configuration on platforms like Vercel
+  if (process.env[key]) return process.env[key];
   const row = await db.get("SELECT value FROM settings WHERE key = ?", key);
-  return row ? row.value : (process.env[key] || defaultValue);
+  return row ? row.value : defaultValue;
 };
 
 const getBkashHeaders = async (merchantId?: string) => {
@@ -1744,7 +1672,7 @@ async function startServer() {
     if (process.env.NODE_ENV !== "production" && vite) {
       const url = req.originalUrl;
       try {
-        let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
       } catch (e) {
@@ -1752,15 +1680,19 @@ async function startServer() {
         next(e);
       }
     } else if (process.env.NODE_ENV === "production") {
-      res.sendFile(path.resolve(__dirname, "dist", "index.html"));
+      res.sendFile(path.resolve(process.cwd(), "dist", "index.html"));
     } else {
       next();
     }
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
+
+export default app;
 
 startServer();
