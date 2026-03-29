@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { existsSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import http from 'http';
 
@@ -66,7 +66,6 @@ async function bootstrap() {
     setTimeout(() => {
       if (existsSync(LOCK_FILE)) {
         try {
-          const { unlinkSync } = await import('fs');
           unlinkSync(LOCK_FILE);
         } catch (e) {}
       }

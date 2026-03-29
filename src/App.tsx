@@ -1456,6 +1456,61 @@ const AuditLogsPage = () => {
   );
 };
 
+const ConfirmModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  confirmText = "Confirm", 
+  cancelText = "Cancel",
+  isDestructive = false
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onConfirm: () => void, 
+  title: string, 
+  message: string,
+  confirmText?: string,
+  cancelText?: string,
+  isDestructive?: boolean
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-surface-900 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-surface-200 dark:border-surface-800"
+      >
+        <h3 className="text-xl font-bold mb-2">{title}</h3>
+        <p className="text-surface-500 dark:text-surface-400 mb-8">{message}</p>
+        <div className="flex gap-4">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3 px-6 rounded-2xl font-bold text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button 
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className={cn(
+              "flex-1 py-3 px-6 rounded-2xl font-bold text-white transition-all shadow-lg",
+              isDestructive ? "bg-red-600 hover:bg-red-700 shadow-red-600/20" : "bg-bkash hover:bg-bkash/90 shadow-bkash/20"
+            )}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const SystemVersions = () => {
   const [versions, setVersions] = useState<any[]>([]);
   const [gitLogs, setGitLogs] = useState<any[]>([]);
@@ -1464,6 +1519,18 @@ const SystemVersions = () => {
   const [isCheckingOut, setIsCheckingOut] = useState<string | null>(null);
   const [newVersionName, setNewVersionName] = useState("");
   const [activeTab, setActiveTab] = useState<'snapshots' | 'git'>('snapshots');
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
 
   const fetchData = async () => {
     try {
@@ -1505,54 +1572,71 @@ const SystemVersions = () => {
   };
 
   const restoreVersion = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to restore to version "${name}"? This will overwrite current settings.`)) return;
-    
-    try {
-      const res = await secureFetch(`/api/admin/system/versions/${id}/restore`, { method: "POST" });
-      if (res.ok) {
-        toast.success("System restored successfully. Reloading...");
-        setTimeout(() => window.location.reload(), 1500);
+    setConfirmConfig({
+      isOpen: true,
+      title: "Restore System Snapshot",
+      message: `Are you sure you want to restore to version "${name}"? This will overwrite current system settings with the values from this snapshot.`,
+      onConfirm: async () => {
+        try {
+          const res = await secureFetch(`/api/admin/system/versions/${id}/restore`, { method: "POST" });
+          if (res.ok) {
+            toast.success("System restored successfully. Reloading...");
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        } catch (err) {
+          toast.error("Failed to restore version");
+        }
       }
-    } catch (err) {
-      toast.error("Failed to restore version");
-    }
+    });
   };
 
   const checkoutCommit = async (hash: string) => {
-    if (!window.confirm(`Are you sure you want to checkout to commit ${hash}? The server will restart.`)) return;
-    
-    setIsCheckingOut(hash);
-    try {
-      const res = await secureFetch("/api/admin/system/git-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hash })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message);
-        setTimeout(() => window.location.reload(), 5000);
-      } else {
-        toast.error(data.error || "Checkout failed");
+    setConfirmConfig({
+      isOpen: true,
+      title: "Checkout Git Commit",
+      message: `Are you sure you want to checkout to commit ${hash}? The server will restart and rebuild the application. This may take up to a minute.`,
+      onConfirm: async () => {
+        setIsCheckingOut(hash);
+        try {
+          const res = await secureFetch("/api/admin/system/git-checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hash })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message);
+            setTimeout(() => window.location.reload(), 5000);
+          } else {
+            toast.error(data.error || "Checkout failed");
+          }
+        } catch (err) {
+          toast.error("Checkout failed");
+        } finally {
+          setIsCheckingOut(null);
+        }
       }
-    } catch (err) {
-      toast.error("Checkout failed");
-    } finally {
-      setIsCheckingOut(null);
-    }
+    });
   };
 
   const deleteVersion = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this version?")) return;
-    try {
-      const res = await secureFetch(`/api/admin/system/versions/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("Version deleted");
-        fetchData();
+    setConfirmConfig({
+      isOpen: true,
+      title: "Delete Snapshot",
+      message: "Are you sure you want to delete this system snapshot? This action cannot be undone.",
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await secureFetch(`/api/admin/system/versions/${id}`, { method: "DELETE" });
+          if (res.ok) {
+            toast.success("Version deleted");
+            fetchData();
+          }
+        } catch (err) {
+          toast.error("Failed to delete version");
+        }
       }
-    } catch (err) {
-      toast.error("Failed to delete version");
-    }
+    });
   };
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-bkash" /></div>;
@@ -1661,6 +1745,57 @@ const SystemVersions = () => {
           <p className="text-[10px] text-surface-400 text-center mt-4 italic">Showing last 20 commits. Use the "System Update" tool to pull the latest changes.</p>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        isDestructive={confirmConfig.isDestructive}
+      />
+    </div>
+  );
+};
+
+const LogModal = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  content 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  title: string, 
+  content: string 
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-surface-900 rounded-3xl p-8 max-w-4xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-surface-200 dark:border-surface-800"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto bg-black rounded-2xl p-6 font-mono text-xs text-emerald-500 whitespace-pre-wrap">
+          {content || "No logs available."}
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="py-3 px-8 rounded-2xl font-bold bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 };
@@ -1676,6 +1811,9 @@ const SettingsPage = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [version, setVersion] = useState<string>("");
+  const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logContent, setLogContent] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const isOnline = useOnlineStatus();
   const { theme, setTheme } = useTheme();
@@ -1777,8 +1915,6 @@ const SettingsPage = () => {
   };
 
   const handleUpdate = async () => {
-    if (!window.confirm("Are you sure you want to update the system? This will restart the server.")) return;
-    
     setIsUpdating(true);
     try {
       const res = await secureFetch("/api/admin/system/update", { method: "POST" });
@@ -1793,6 +1929,19 @@ const SettingsPage = () => {
       toast.error("Update failed");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const viewUpdateLog = async () => {
+    try {
+      const res = await fetch("/api/admin/system/update-log", {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const text = await res.text();
+      setLogContent(text);
+      setShowLogModal(true);
+    } catch (e: any) {
+      toast.error("Failed to fetch logs");
     }
   };
 
@@ -2062,7 +2211,7 @@ const SettingsPage = () => {
                       <p className="text-[10px] text-surface-400">Commit: {updateInfo.latestCommit}</p>
                     </div>
                     <button
-                      onClick={handleUpdate}
+                      onClick={() => setShowUpdateConfirm(true)}
                       disabled={isUpdating}
                       className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
@@ -2070,17 +2219,7 @@ const SettingsPage = () => {
                       Confirm Update
                     </button>
                     <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch("/api/admin/system/update-log", {
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                          });
-                          const text = await res.text();
-                          alert(text);
-                        } catch (e: any) {
-                          alert("Failed to fetch log: " + e.message);
-                        }
-                      }}
+                      onClick={viewUpdateLog}
                       className="p-2.5 bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-700 transition-all"
                       title="View Update Log"
                     >
@@ -2101,9 +2240,11 @@ const SettingsPage = () => {
                   onClick={async () => {
                     try {
                       const res = await secureFetch("/api/admin/system/diagnostics");
-                      alert(JSON.stringify(res, null, 2));
+                      const data = await res.json();
+                      setLogContent(JSON.stringify(data, null, 2));
+                      setShowLogModal(true);
                     } catch (e: any) {
-                      alert("Failed to fetch diagnostics: " + e.message);
+                      toast.error("Failed to fetch diagnostics: " + e.message);
                     }
                   }}
                   className="p-2.5 bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-700 transition-all"
@@ -2216,6 +2357,22 @@ const SettingsPage = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={showUpdateConfirm}
+        onClose={() => setShowUpdateConfirm(false)}
+        onConfirm={handleUpdate}
+        title="Confirm System Update"
+        message="Are you sure you want to update the system to the latest version? This will pull the latest code and restart the server, which may take up to a minute."
+        confirmText="Update Now"
+      />
+
+      <LogModal 
+        isOpen={showLogModal}
+        onClose={() => setShowLogModal(false)}
+        title="System Log Viewer"
+        content={logContent}
+      />
     </motion.div>
   );
 };
@@ -3211,6 +3368,8 @@ const MerchantManagement = () => {
   const [loading, setLoading] = useState(true);
   const [editingPermissions, setEditingPermissions] = useState<any>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logContent, setLogContent] = useState("");
 
   const fetchMerchants = async () => {
     try {
@@ -3343,7 +3502,15 @@ const MerchantManagement = () => {
                       </span>
                       {m.kyc_details && (
                         <button 
-                          onClick={() => alert(`KYC Details:\n${JSON.stringify(JSON.parse(m.kyc_details), null, 2)}`)}
+                          onClick={() => {
+                            try {
+                              setLogContent(JSON.stringify(JSON.parse(m.kyc_details), null, 2));
+                              setShowLogModal(true);
+                            } catch (e) {
+                              setLogContent(m.kyc_details);
+                              setShowLogModal(true);
+                            }
+                          }}
                           className="text-[10px] text-bkash hover:underline font-black uppercase tracking-widest text-left ml-1"
                         >
                           View Documents
@@ -3428,6 +3595,13 @@ const MerchantManagement = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <LogModal 
+        isOpen={showLogModal}
+        onClose={() => setShowLogModal(false)}
+        title="KYC Documents"
+        content={logContent}
+      />
     </div>
   );
 };
@@ -3624,6 +3798,18 @@ const PayoutAccounts = () => {
     bank_branch: '',
     routing_number: ''
   });
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
   const merchantId = localStorage.getItem("merchant_id");
 
   const fetchAccounts = async () => {
@@ -3661,16 +3847,23 @@ const PayoutAccounts = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure?")) return;
-    try {
-      const res = await secureFetch(`/api/merchant/payout-accounts/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("Account deleted");
-        fetchAccounts();
+    setConfirmConfig({
+      isOpen: true,
+      title: "Delete Payout Account",
+      message: "Are you sure you want to delete this payout account? This action cannot be undone.",
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await secureFetch(`/api/merchant/payout-accounts/${id}`, { method: "DELETE" });
+          if (res.ok) {
+            toast.success("Account deleted");
+            fetchAccounts();
+          }
+        } catch (err) {
+          toast.error("Failed to delete account");
+        }
       }
-    } catch (err) {
-      toast.error("Failed to delete account");
-    }
+    });
   };
 
   if (loading) return <div className="flex items-center justify-center h-32"><Loader2 className="animate-spin text-bkash" /></div>;
@@ -3761,6 +3954,15 @@ const PayoutAccounts = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        isDestructive={confirmConfig.isDestructive}
+      />
     </div>
   );
 };
@@ -5285,6 +5487,18 @@ const UserManagement = () => {
     role: "user",
     permissions: [] as string[]
   });
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
 
   const allPermissions = [
     { id: "dashboard", label: "Dashboard" },
@@ -5344,16 +5558,23 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
-    try {
-      const res = await secureFetch(`/api/admin/users/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("User deleted");
-        fetchUsers();
+    setConfirmConfig({
+      isOpen: true,
+      title: "Delete User",
+      message: "Are you sure you want to delete this user? This action cannot be undone.",
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await secureFetch(`/api/admin/users/${id}`, { method: "DELETE" });
+          if (res.ok) {
+            toast.success("User deleted");
+            fetchUsers();
+          }
+        } catch (err) {
+          toast.error("Failed to delete user");
+        }
       }
-    } catch (err) {
-      toast.error("Failed to delete user");
-    }
+    });
   };
 
   const togglePermission = (permId: string) => {
@@ -5549,6 +5770,15 @@ const UserManagement = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        isDestructive={confirmConfig.isDestructive}
+      />
     </motion.div>
   );
 };

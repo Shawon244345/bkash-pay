@@ -41,17 +41,16 @@ This application is designed for **one-click deployment**. You don't even need t
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Framer Motion, Lucide Icons.
-- **Backend**: Node.js, Express, SQLite (sqlite3).
-- **Database**: SQLite (Zero configuration required).
+- **Backend**: Node.js, Express, MySQL (mysql2).
+- **Database**: MySQL (Self-dependent, requires DB credentials in .env).
 
 ### 🛠 Troubleshooting (cPanel Errors)
 
-If you encounter errors like `GLIBC_2.29 not found` or `EBADENGINE` during `npm install`:
+If you encounter errors during deployment:
 
 1.  **Node.js Version**: Ensure you are using **Node.js 18 or 20** in the cPanel Node.js Selector.
-2.  **Clear Cache**:
+2.  **Database Connection**: Ensure your MySQL database is created in cPanel (MySQL® Databases) and the credentials (host, user, password, name) are correctly set in your `.env` file.
+3.  **Clear Cache**:
     *   Stop the application in cPanel.
     *   Delete `node_modules` and `package-lock.json` from your file manager.
-    *   Remove any modules listed in the "Modules" section of the cPanel Node.js App setup (they should be installed via `package.json` instead).
-3.  **SQLite Issues**: If `sqlite3` still fails to install due to `GLIBC` versions, it means your server's operating system is too old for the prebuilt binaries. 
-    *   **Solution**: Contact your hosting provider to upgrade the OS, or ask them to install `sqlite3` globally for your Node.js version.
+    *   Re-run `npm install` or restart the app to trigger auto-install.

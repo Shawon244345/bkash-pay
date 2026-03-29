@@ -1,5 +1,5 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+import mysql from "mysql2/promise";
 import sqlite3 from "sqlite3";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
@@ -41,23 +41,91 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Database Setup
-const dbPath = path.join(process.cwd(), "payments.db");
-const dbRaw = new sqlite3.Database(dbPath);
+// --- Database Setup (Hybrid: MySQL with SQLite Fallback) ---
+let dbType: 'mysql' | 'sqlite' = 'sqlite';
+let mysqlPool: any = null;
+let sqliteDb: any = null;
+
+const initDatabaseConnection = async () => {
+  const useMysql = process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME;
+  
+  if (useMysql) {
+    try {
+      console.log("Attempting to connect to MySQL...");
+      mysqlPool = mysql.createPool({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        multipleStatements: true,
+        connectTimeout: 5000 // 5 seconds timeout
+      });
+      // Test connection
+      console.log("Testing MySQL connection...");
+      await Promise.race([
+        mysqlPool.query("SELECT 1"),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("MySQL connection test timed out")), 5000))
+      ]);
+      dbType = 'mysql';
+      console.log("Connected to MySQL successfully.");
+    } catch (e) {
+      console.error("MySQL connection failed, falling back to SQLite:", e);
+      dbType = 'sqlite';
+    }
+  } else {
+    console.log("MySQL credentials not found, using SQLite.");
+    dbType = 'sqlite';
+  }
+
+  if (dbType === 'sqlite') {
+    const dbPath = path.join(process.cwd(), "payments.db");
+    sqliteDb = new sqlite3.Database(dbPath);
+    console.log(`SQLite database initialized at ${dbPath}`);
+  }
+};
 
 const db = {
-  run: (sql: string, ...params: any[]) => new Promise<void>((resolve, reject) => {
-    dbRaw.run(sql, params, (err) => err ? reject(err) : resolve());
-  }),
-  get: (sql: string, ...params: any[]) => new Promise<any>((resolve, reject) => {
-    dbRaw.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
-  }),
-  all: (sql: string, ...params: any[]) => new Promise<any[]>((resolve, reject) => {
-    dbRaw.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-  }),
-  exec: (sql: string) => new Promise<void>((resolve, reject) => {
-    dbRaw.exec(sql, (err) => err ? reject(err) : resolve());
-  })
+  run: async (sql: string, ...params: any[]) => {
+    if (dbType === 'mysql') {
+      await mysqlPool.query(sql, params);
+    } else {
+      return new Promise<void>((resolve, reject) => {
+        sqliteDb.run(sql.replace(/\?/g, '?'), params, (err: any) => err ? reject(err) : resolve());
+      });
+    }
+  },
+  get: async (sql: string, ...params: any[]) => {
+    if (dbType === 'mysql') {
+      const [rows] = await mysqlPool.query(sql, params);
+      return (rows as any[])[0];
+    } else {
+      return new Promise<any>((resolve, reject) => {
+        sqliteDb.get(sql, params, (err: any, row: any) => err ? reject(err) : resolve(row));
+      });
+    }
+  },
+  all: async (sql: string, ...params: any[]) => {
+    if (dbType === 'mysql') {
+      const [rows] = await mysqlPool.query(sql, params);
+      return rows as any[];
+    } else {
+      return new Promise<any[]>((resolve, reject) => {
+        sqliteDb.all(sql, params, (err: any, rows: any[]) => err ? reject(err) : resolve(rows));
+      });
+    }
+  },
+  exec: async (sql: string) => {
+    if (dbType === 'mysql') {
+      await mysqlPool.query(sql);
+    } else {
+      return new Promise<void>((resolve, reject) => {
+        sqliteDb.exec(sql, (err: any) => err ? reject(err) : resolve());
+      });
+    }
+  }
 };
 
 const logToFile = async (message: string, data: any, level: string = "INFO") => {
@@ -80,99 +148,108 @@ const auditLog = async (action: string, user: string, details: any) => {
 };
 
 const initDb = async () => {
+  await initDatabaseConnection();
+  
   try {
+    // Use TEXT for SQLite and VARCHAR/LONGTEXT for MySQL
+    const isMysql = dbType === 'mysql';
+    const textType = isMysql ? 'VARCHAR(255)' : 'TEXT';
+    const longTextType = isMysql ? 'LONGTEXT' : 'TEXT';
+    const doubleType = isMysql ? 'DOUBLE' : 'REAL';
+    const boolType = isMysql ? 'TINYINT(1)' : 'BOOLEAN';
+
     await db.exec(`
       CREATE TABLE IF NOT EXISTS transactions (
-        id TEXT PRIMARY KEY,
-        payment_id TEXT,
-        trx_id TEXT,
-        amount REAL,
-        status TEXT,
-        customer_msisdn TEXT,
-        merchant_invoice TEXT,
-        merchant_id TEXT,
-        payment_mode TEXT DEFAULT 'GLOBAL',
+        id ${textType} PRIMARY KEY,
+        payment_id ${textType},
+        trx_id ${textType},
+        amount ${doubleType},
+        status ${textType},
+        customer_msisdn ${textType},
+        merchant_invoice ${textType},
+        merchant_id ${textType},
+        payment_mode ${textType} DEFAULT 'GLOBAL',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
   
       CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
+        ${isMysql ? '`key`' : 'key'} ${textType} PRIMARY KEY,
+        value ${longTextType}
       );
 
     CREATE TABLE IF NOT EXISTS refunds (
-      id TEXT PRIMARY KEY,
-      refund_id TEXT,
-      original_trx_id TEXT,
-      original_payment_id TEXT,
-      amount REAL,
-      refund_amount REAL,
-      status TEXT,
-      reason TEXT,
-      sku TEXT,
+      id ${textType} PRIMARY KEY,
+      refund_id ${textType},
+      original_trx_id ${textType},
+      original_payment_id ${textType},
+      amount ${doubleType},
+      refund_amount ${doubleType},
+      status ${textType},
+      reason ${textType},
+      sku ${textType},
       refund_execution_time DATETIME,
-      response_data TEXT,
-      ip_address TEXT,
-      initiated_by TEXT,
+      response_data ${longTextType},
+      ip_address ${textType},
+      initiated_by ${textType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS logs (
-      id TEXT PRIMARY KEY,
-      level TEXT,
-      message TEXT,
-      details TEXT,
+      id ${textType} PRIMARY KEY,
+      level ${textType},
+      message ${longTextType},
+      details ${longTextType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS audit_logs (
-      id TEXT PRIMARY KEY,
-      action TEXT,
-      user TEXT,
-      details TEXT,
+      id ${textType} PRIMARY KEY,
+      action ${textType},
+      user ${textType},
+      details ${longTextType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS merchants (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      email TEXT UNIQUE,
-      payment_mode TEXT DEFAULT 'GLOBAL', -- 'OWN' or 'GLOBAL'
-      bkash_app_key TEXT,
-      bkash_app_secret TEXT,
-      bkash_username TEXT,
-      bkash_password TEXT,
-      api_key TEXT UNIQUE,
-      balance REAL DEFAULT 0,
-      status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'INACTIVE'
-      kyc_status TEXT DEFAULT 'PENDING', -- 'PENDING', 'SUBMITTED', 'VERIFIED', 'REJECTED'
-      kyc_details TEXT, -- JSON: { nid, passport, trade_license, contact_number }
-      permissions TEXT, -- JSON array of allowed tabs
+      id ${textType} PRIMARY KEY,
+      name ${textType},
+      email ${textType} UNIQUE,
+      payment_mode ${textType} DEFAULT 'GLOBAL',
+      bkash_app_key ${textType},
+      bkash_app_secret ${textType},
+      bkash_username ${textType},
+      bkash_password ${textType},
+      api_key ${textType} UNIQUE,
+      balance ${doubleType} DEFAULT 0,
+      status ${textType} DEFAULT 'ACTIVE',
+      kyc_status ${textType} DEFAULT 'PENDING',
+      kyc_details ${longTextType},
+      permissions ${longTextType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS payout_accounts (
-      id TEXT PRIMARY KEY,
-      merchant_id TEXT,
-      type TEXT, -- 'MFS' or 'BANK'
-      provider TEXT, -- 'bKash', 'Nagad', 'Rocket', or Bank Name
-      account_number TEXT,
-      account_name TEXT,
-      bank_branch TEXT,
-      routing_number TEXT,
-      is_default BOOLEAN DEFAULT 0,
+      id ${textType} PRIMARY KEY,
+      merchant_id ${textType},
+      type ${textType},
+      provider ${textType},
+      account_number ${textType},
+      account_name ${textType},
+      bank_branch ${textType},
+      routing_number ${textType},
+      is_default ${boolType} DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (merchant_id) REFERENCES merchants(id)
     );
 
     CREATE TABLE IF NOT EXISTS withdrawals (
-      id TEXT PRIMARY KEY,
-      merchant_id TEXT,
-      payout_account_id TEXT,
-      amount REAL,
-      status TEXT DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'
-      admin_note TEXT,
+      id ${textType} PRIMARY KEY,
+      merchant_id ${textType},
+      payout_account_id ${textType},
+      amount ${doubleType},
+      status ${textType} DEFAULT 'PENDING',
+      admin_note ${longTextType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (merchant_id) REFERENCES merchants(id),
@@ -180,23 +257,23 @@ const initDb = async () => {
     );
 
     CREATE TABLE IF NOT EXISTS subscription_plans (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      description TEXT,
-      price REAL,
-      duration_days INTEGER,
-      features TEXT, -- JSON string
-      is_active BOOLEAN DEFAULT 1,
+      id ${textType} PRIMARY KEY,
+      name ${textType},
+      description ${longTextType},
+      price ${doubleType},
+      duration_days INT,
+      features ${longTextType},
+      is_active ${boolType} DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS subscriptions (
-      id TEXT PRIMARY KEY,
-      merchant_id TEXT,
-      plan_id TEXT,
-      status TEXT DEFAULT 'PENDING', -- 'PENDING', 'ACTIVE', 'EXPIRED', 'CANCELLED'
-      payment_id TEXT,
-      trx_id TEXT,
+      id ${textType} PRIMARY KEY,
+      merchant_id ${textType},
+      plan_id ${textType},
+      status ${textType} DEFAULT 'PENDING',
+      payment_id ${textType},
+      trx_id ${textType},
       start_date DATETIME,
       end_date DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -205,32 +282,32 @@ const initDb = async () => {
     );
 
     CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE,
-      email TEXT,
-      password TEXT,
-      role TEXT,
-      permissions TEXT,
-      avatar TEXT,
-      merchant_id TEXT,
+      id ${textType} PRIMARY KEY,
+      username ${textType} UNIQUE,
+      email ${textType},
+      password ${textType},
+      role ${textType},
+      permissions ${longTextType},
+      avatar ${textType},
+      merchant_id ${textType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (merchant_id) REFERENCES merchants(id)
     );
     CREATE TABLE IF NOT EXISTS login_history (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      username TEXT,
-      ip_address TEXT,
-      user_agent TEXT,
-      status TEXT,
+      id ${textType} PRIMARY KEY,
+      user_id ${textType},
+      username ${textType},
+      ip_address ${textType},
+      user_agent ${longTextType},
+      status ${textType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
     CREATE TABLE IF NOT EXISTS system_versions (
-      id TEXT PRIMARY KEY,
-      version_name TEXT,
-      settings_snapshot TEXT,
-      created_by TEXT,
+      id ${textType} PRIMARY KEY,
+      version_name ${textType},
+      settings_snapshot ${longTextType},
+      created_by ${textType},
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -239,21 +316,21 @@ const initDb = async () => {
   }
 
   // Migration for users table to ensure all columns exist
-  try { await db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE users ADD COLUMN merchant_id TEXT"); } catch (e) {}
+  try { await db.run(`ALTER TABLE users ADD COLUMN email ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE users ADD COLUMN avatar ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE users ADD COLUMN merchant_id ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'}`); } catch (e) {}
 
   // Migration for transactions and refunds to include merchant_id
-  try { await db.run("ALTER TABLE transactions ADD COLUMN merchant_id TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'GLOBAL'"); } catch (e) {}
-  try { await db.run("ALTER TABLE refunds ADD COLUMN merchant_id TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE merchants ADD COLUMN balance REAL DEFAULT 0"); } catch (e) {}
+  try { await db.run(`ALTER TABLE transactions ADD COLUMN merchant_id ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE transactions ADD COLUMN payment_mode ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'} DEFAULT 'GLOBAL'`); } catch (e) {}
+  try { await db.run(`ALTER TABLE refunds ADD COLUMN merchant_id ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE merchants ADD COLUMN balance ${dbType === 'mysql' ? 'DOUBLE' : 'REAL'} DEFAULT 0`); } catch (e) {}
 
   // Migration for merchants table
-  try { await db.run("ALTER TABLE merchants ADD COLUMN kyc_status TEXT DEFAULT 'PENDING'"); } catch (e) {}
-  try { await db.run("ALTER TABLE merchants ADD COLUMN kyc_details TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE merchants ADD COLUMN permissions TEXT"); } catch (e) {}
-  try { await db.run("ALTER TABLE merchants ADD COLUMN status TEXT DEFAULT 'ACTIVE'"); } catch (e) {}
+  try { await db.run(`ALTER TABLE merchants ADD COLUMN kyc_status ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'} DEFAULT 'PENDING'`); } catch (e) {}
+  try { await db.run(`ALTER TABLE merchants ADD COLUMN kyc_details ${dbType === 'mysql' ? 'LONGTEXT' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE merchants ADD COLUMN permissions ${dbType === 'mysql' ? 'LONGTEXT' : 'TEXT'}`); } catch (e) {}
+  try { await db.run(`ALTER TABLE merchants ADD COLUMN status ${dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'} DEFAULT 'ACTIVE'`); } catch (e) {}
 
   // Seed default credentials if not present
   const seedSettings = [
@@ -268,7 +345,11 @@ const initDb = async () => {
   ];
 
   for (const s of seedSettings) {
-    await db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
+    if (dbType === 'mysql') {
+      await db.run("INSERT IGNORE INTO settings (`key`, value) VALUES (?, ?)", s.key, s.value);
+    } else {
+      await db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
+    }
   }
 
   // Seed default admin user
@@ -421,22 +502,15 @@ const upload = multer({
 });
 
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+app.get("/api/health", (req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// Vite setup for development
+// Vite setup for development (moved inside startServer)
 let vite: any;
-if (process.env.NODE_ENV !== "production") {
-  const { createServer: createViteServer } = await import("vite");
-  vite = await createViteServer({
-    root: __dirname,
-    server: { 
-      middlewareMode: true,
-      hmr: false
-    },
-    appType: "custom",
-  });
-  app.use(vite.middlewares);
-}
 
 // Static fallback for production
 if (process.env.NODE_ENV === "production") {
@@ -673,10 +747,6 @@ const getBkashHeaders = async (merchantId?: string) => {
 };
 
 // API Routes
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", mode: process.env.NODE_ENV || 'development' });
-});
-
 app.post("/api/bkash/create-payment", async (req, res) => {
   try {
     const { amount, invoice, merchantId } = req.body;
@@ -1917,33 +1987,98 @@ app.get("/api/admin/system/update-log", authenticateToken, authorizeRole(['admin
 
 // Vite Middleware
 async function startServer() {
-  await initDb();
+  console.log("Starting server process...");
+  
+  // 1. Register Vite middleware placeholder
+  app.use((req, res, next) => {
+    if (vite && vite.middlewares) {
+      return vite.middlewares(req, res, next);
+    }
+    next();
+  });
 
-  // SPA fallback
+  // 2. Register SPA fallback middleware
   app.get("*", async (req, res, next) => {
+    // Skip API routes
     if (req.originalUrl.startsWith('/api')) return next();
     
-    if (process.env.NODE_ENV !== "production" && vite) {
+    // Skip static files if they exist (e.g. from /public or /uploads)
+    if (req.originalUrl.includes('.')) return next();
+
+    if (process.env.NODE_ENV !== "production") {
+      if (!vite) {
+        // Show a simple loading page while Vite is initializing
+        return res.status(200).send(`
+          <html>
+            <head><title>Initializing...</title></head>
+            <body style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; background: #f8f9fa; margin: 0;">
+              <div style="border: 4px solid #f3f3f3; border-top: 4px solid #e2136e; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
+              <p style="margin-top: 20px; color: #6c757d; font-weight: 500;">Initializing bKash Pay System...</p>
+              <script>setTimeout(() => window.location.reload(), 2000);</script>
+              <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </body>
+          </html>
+        `);
+      }
+      
       const url = req.originalUrl;
       try {
-        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        const indexPath = path.resolve(process.cwd(), 'index.html');
+        if (!fs.existsSync(indexPath)) {
+          return res.status(404).send("index.html not found");
+        }
+        let template = fs.readFileSync(indexPath, 'utf-8');
         template = await vite.transformIndexHtml(url, template);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
       } catch (e) {
+        console.error("Vite transform error:", e);
         vite.ssrFixStacktrace(e as Error);
         next(e);
       }
-    } else if (process.env.NODE_ENV === "production") {
-      res.sendFile(path.resolve(process.cwd(), "dist", "index.html"));
     } else {
-      next();
+      const indexPath = path.resolve(process.cwd(), "dist", "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Production build not found. Please run npm run build.");
+      }
     }
   });
 
+  // 3. Start listening immediately to satisfy the platform's port check
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server is now listening on http://0.0.0.0:${PORT}`);
     });
+  }
+
+  try {
+    // 4. Initialize Vite if in development
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        console.log("Initializing Vite server...");
+        const { createServer: createViteServer } = await import("vite");
+        vite = await createViteServer({
+          root: process.cwd(),
+          server: { 
+            middlewareMode: true,
+            hmr: false
+          },
+          appType: "spa",
+        });
+        console.log("Vite server initialized.");
+      } catch (e) {
+        console.error("Failed to initialize Vite:", e);
+      }
+    }
+
+    // 5. Initialize database
+    console.log("Initializing database...");
+    await initDb();
+    console.log("Database initialization complete.");
+    console.log("Server setup complete.");
+  } catch (error) {
+    console.error("CRITICAL: Error during server startup:", error);
   }
 }
 
