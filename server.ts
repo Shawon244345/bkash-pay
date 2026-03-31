@@ -492,7 +492,52 @@ const limiter = rateLimit({
 
 app.use("/api/", limiter);
 
+// Rate Limiters
+const paymentLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // Limit each IP to 5 payment creations per minute
+  message: { error: "Too many payment requests, please try again after a minute" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || "bkash-payment-gateway-secret-key-2024";
+
+// Middleware to authenticate via API Key or JWT
+const authenticateApiKeyOrToken = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers['x-api-key'];
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+      return next();
+    } catch (err) {
+      // If token is invalid, don't fail yet, check API key
+    }
+  }
+
+  if (apiKey) {
+    const merchant = await db.get("SELECT * FROM merchants WHERE api_key = ? AND status = 'ACTIVE'", apiKey);
+    if (merchant) {
+      req.user = { id: merchant.id, role: 'merchant', merchant_id: merchant.id };
+      return next();
+    }
+  }
+
+  // For public checkout links, we might not have auth, but we should validate the merchantId in the body
+  if (req.path === '/api/bkash/create-payment' && req.body.merchantId) {
+    const merchant = await db.get("SELECT * FROM merchants WHERE id = ? AND status = 'ACTIVE'", req.body.merchantId);
+    if (merchant) {
+      return next();
+    }
+  }
+
+  return res.status(401).json({ error: "Unauthorized: Invalid API Key or Token" });
+};
 
 // Security Helpers
 const hashPassword = async (password: string) => {
@@ -1050,10 +1095,75 @@ app.post("/api/bkash/agreement/cancel", async (req, res) => {
   }
 });
 
+// API Documentation Route
+app.get("/api/docs", (req, res) => {
+  res.json({
+    name: "bKash Payment Gateway API",
+    version: APP_VERSION,
+    description: "Secure API for bKash tokenized payment integration",
+    endpoints: [
+      {
+        path: "/api/bkash/create-payment",
+        method: "POST",
+        description: "Create a new bKash payment",
+        security: "Public (with valid merchantId) or API Key (x-api-key)",
+        parameters: {
+          amount: "Number (Mandatory) - Amount in BDT",
+          invoice: "String (Optional) - Merchant invoice number",
+          merchantId: "String (Mandatory) - Merchant unique ID"
+        },
+        response: {
+          bkashURL: "String - The URL to redirect the customer to bKash checkout"
+        }
+      },
+      {
+        path: "/api/bkash/execute-payment",
+        method: "POST",
+        description: "Execute a bKash payment after customer authorization",
+        security: "Public",
+        parameters: {
+          paymentID: "String (Mandatory) - The payment ID from bKash"
+        },
+        response: {
+          status: "String - Payment execution status",
+          trxID: "String - bKash transaction ID"
+        }
+      },
+      {
+        path: "/api/bkash/b2c-payment",
+        method: "POST",
+        description: "Initiate a B2C payout (Merchant to Customer)",
+        security: "JWT Token (Admin/Merchant)",
+        parameters: {
+          amount: "Number (Mandatory)",
+          receiverMSISDN: "String (Mandatory)",
+          invoice: "String (Mandatory)",
+          merchantId: "String (Optional for merchants, mandatory for admins)"
+        }
+      }
+    ]
+  });
+});
+
 // API Routes
-app.post("/api/bkash/create-payment", async (req, res) => {
+app.post("/api/bkash/create-payment", paymentLimiter, authenticateApiKeyOrToken, async (req, res) => {
   try {
     const { amount, invoice, merchantId } = req.body;
+
+    // Validation
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ error: "Valid amount is required" });
+    }
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    // Security: Verify Merchant
+    const merchant = await db.get("SELECT * FROM merchants WHERE id = ? AND status = 'ACTIVE'", merchantId);
+    if (!merchant) {
+      return res.status(404).json({ error: "Active merchant not found" });
+    }
+
     const headers = await getBkashHeaders(merchantId);
     const baseUrl = await getSetting("BKASH_BASE_URL");
     let appUrl = await getSetting("APP_URL");
@@ -1064,7 +1174,7 @@ app.post("/api/bkash/create-payment", async (req, res) => {
       {
         mode: "0011",
         payerReference: invoice || `INV-${Date.now()}`,
-        callbackURL: `${appUrl}/api/bkash/callback?mid=${merchantId || ''}`,
+        callbackURL: `${appUrl}/api/bkash/callback?mid=${merchantId}`,
         amount: amount.toString(),
         currency: "BDT",
         intent: "sale",
@@ -1077,18 +1187,14 @@ app.post("/api/bkash/create-payment", async (req, res) => {
     await logToFile("bKash Create Response", data);
 
     if (data.paymentID && data.bkashURL) {
-      let paymentMode = 'GLOBAL';
-      if (merchantId) {
-        const merchant = await db.get("SELECT payment_mode FROM merchants WHERE id = ?", merchantId);
-        if (merchant) paymentMode = merchant.payment_mode;
-      }
+      const paymentMode = merchant.payment_mode || 'GLOBAL';
       
       await db.run(
         "INSERT INTO transactions (id, payment_id, amount, status, merchant_invoice, merchant_id, payment_mode) VALUES (?, ?, ?, ?, ?, ?, ?)", 
         uuidv4(), data.paymentID, amount, "initiated", invoice, merchantId, paymentMode
       );
       
-      res.json({ bkashURL: data.bkashURL });
+      res.json({ bkashURL: data.bkashURL, paymentID: data.paymentID });
     } else {
       res.status(400).json({ error: data.statusMessage || "Failed to create payment" });
     }
