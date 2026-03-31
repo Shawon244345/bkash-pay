@@ -101,37 +101,57 @@ const fixSql = (sql: string) => {
 const db = {
   run: async (sql: string, ...params: any[]) => {
     const finalSql = fixSql(sql);
-    if (dbType === 'mysql') {
-      const [result] = await mysqlPool.query(finalSql, params);
-      return result;
-    } else {
-      return sqliteDb.prepare(finalSql).run(params);
+    try {
+      if (dbType === 'mysql') {
+        const [result] = await mysqlPool.query(finalSql, params);
+        return result;
+      } else {
+        return sqliteDb.prepare(finalSql).run(params);
+      }
+    } catch (error) {
+      console.error(`Database run error: ${error instanceof Error ? error.message : String(error)}`, { sql: finalSql, params });
+      throw error;
     }
   },
   get: async (sql: string, ...params: any[]) => {
     const finalSql = fixSql(sql);
-    if (dbType === 'mysql') {
-      const [rows] = await mysqlPool.query(finalSql, params);
-      return (rows as any[])[0];
-    } else {
-      return sqliteDb.prepare(finalSql).get(params);
+    try {
+      if (dbType === 'mysql') {
+        const [rows] = await mysqlPool.query(finalSql, params);
+        return (rows as any[])[0];
+      } else {
+        return sqliteDb.prepare(finalSql).get(params);
+      }
+    } catch (error) {
+      console.error(`Database get error: ${error instanceof Error ? error.message : String(error)}`, { sql: finalSql, params });
+      throw error;
     }
   },
   all: async (sql: string, ...params: any[]) => {
     const finalSql = fixSql(sql);
-    if (dbType === 'mysql') {
-      const [rows] = await mysqlPool.query(finalSql, params);
-      return rows as any[];
-    } else {
-      return sqliteDb.prepare(finalSql).all(params);
+    try {
+      if (dbType === 'mysql') {
+        const [rows] = await mysqlPool.query(finalSql, params);
+        return rows as any[];
+      } else {
+        return sqliteDb.prepare(finalSql).all(params);
+      }
+    } catch (error) {
+      console.error(`Database all error: ${error instanceof Error ? error.message : String(error)}`, { sql: finalSql, params });
+      throw error;
     }
   },
   exec: async (sql: string) => {
     const finalSql = fixSql(sql);
-    if (dbType === 'mysql') {
-      await mysqlPool.query(finalSql);
-    } else {
-      sqliteDb.exec(finalSql);
+    try {
+      if (dbType === 'mysql') {
+        await mysqlPool.query(finalSql);
+      } else {
+        sqliteDb.exec(finalSql);
+      }
+    } catch (error) {
+      console.error(`Database exec error: ${error instanceof Error ? error.message : String(error)}`, { sql: finalSql });
+      throw error;
     }
   }
 };
@@ -733,10 +753,13 @@ app.get("/api/admin/system/diagnostics", authenticateToken, authorizeRole(['admi
 
 // bKash Helpers
 const getSetting = async (key: string, defaultValue: string = "") => {
-  // Prefer environment variables for easier configuration on platforms like Vercel
-  if (process.env[key]) return process.env[key];
   const row = await db.get("SELECT value FROM settings WHERE key = ?", key);
-  return row ? row.value : defaultValue;
+  if (row && row.value !== undefined && row.value !== null && row.value !== "") {
+    return row.value;
+  }
+  // Fallback to environment variables
+  if (process.env[key]) return process.env[key];
+  return defaultValue;
 };
 
 const getBkashHeaders = async (merchantId?: string) => {
