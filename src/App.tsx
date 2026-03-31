@@ -551,6 +551,222 @@ const Dashboard = () => {
   );
 };
 
+const LandingPage = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-black overflow-x-hidden">
+      {/* Navbar */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-surface-100 dark:border-surface-900">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <BkashLogo />
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm font-bold text-surface-500 hover:text-bkash transition-colors">Features</a>
+            <a href="#solutions" className="text-sm font-bold text-surface-500 hover:text-bkash transition-colors">Solutions</a>
+            <a href="#pricing" className="text-sm font-bold text-surface-500 hover:text-bkash transition-colors">Pricing</a>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link to="/admin/login" className="text-sm font-black uppercase tracking-widest text-surface-900 dark:text-white hover:text-bkash transition-colors">Login</Link>
+            <Link to="/merchant/register" className="bg-bkash hover:bg-bkash-dark text-white text-xs font-black px-6 py-3 rounded-xl transition-all shadow-lg shadow-bkash/20 uppercase tracking-widest">Get Started</Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="pt-40 pb-20 px-6">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="space-y-8"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-bkash/10 rounded-full border border-bkash/20">
+              <Zap size={14} className="text-bkash" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-bkash">Enterprise Payment Gateway</span>
+            </div>
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-surface-900 dark:text-white">
+              The Future of <span className="text-bkash">bKash</span> Payments.
+            </h1>
+            <p className="text-lg md:text-xl text-surface-500 font-medium max-w-lg">
+              Empower your business with the most secure, fast, and scalable bKash payment gateway. Built for modern enterprises in Bangladesh.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link to="/merchant/register" className="bg-bkash hover:bg-bkash-dark text-white font-black px-10 py-5 rounded-2xl transition-all shadow-xl shadow-bkash/30 text-center uppercase tracking-widest text-sm">
+                Start Accepting Payments
+              </Link>
+              <Link to="/pay" className="bg-surface-100 dark:bg-surface-900 hover:bg-surface-200 dark:hover:bg-surface-800 text-surface-900 dark:text-white font-black px-10 py-5 rounded-2xl transition-all text-center uppercase tracking-widest text-sm border border-surface-200 dark:border-surface-800">
+                Try Demo Checkout
+              </Link>
+            </div>
+            <div className="flex items-center gap-6 pt-4">
+              <div className="flex -space-x-3">
+                {[1, 2, 3, 4].map(i => (
+                  <img key={i} src={`https://picsum.photos/seed/user${i}/100/100`} className="w-10 h-10 rounded-full border-2 border-white dark:border-black" alt="User" referrerPolicy="no-referrer" />
+                ))}
+              </div>
+              <p className="text-sm text-surface-400 font-medium">Joined by <span className="text-surface-900 dark:text-white font-bold">500+</span> merchants this month</p>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="relative"
+          >
+            <div className="absolute inset-0 bg-bkash/20 blur-[100px] rounded-full" />
+            <div className="relative bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[3rem] p-8 shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-bkash/10 rounded-xl flex items-center justify-center">
+                    <Smartphone className="text-bkash" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-surface-400">Payment Status</p>
+                    <p className="text-sm font-bold">Processing...</p>
+                  </div>
+                </div>
+                <div className="h-2 w-24 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "100%" }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                    className="h-full w-1/2 bg-bkash"
+                  />
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="p-6 bg-surface-50 dark:bg-surface-950 rounded-3xl border border-surface-100 dark:border-surface-800">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-xs font-bold text-surface-400 uppercase tracking-widest">Payable Amount</span>
+                    <span className="text-2xl font-black text-bkash">৳ 1,500.00</span>
+                  </div>
+                  <div className="h-px bg-surface-200 dark:bg-surface-800 mb-4" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-surface-400 uppercase tracking-widest">Merchant</span>
+                    <span className="text-sm font-bold">Demo Store Ltd.</span>
+                  </div>
+                </div>
+                <button className="w-full bg-bkash py-4 rounded-2xl text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-bkash/20">
+                  Confirm Payment
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="py-32 px-6 bg-surface-50 dark:bg-surface-950">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-20 space-y-4">
+            <h2 className="text-4xl md:text-5xl font-black tracking-tighter">Everything you need to scale.</h2>
+            <p className="text-lg text-surface-500 font-medium">Powerful features designed to help you manage payments, payouts, and analytics with ease.</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            <FeatureCard 
+              icon={ShieldCheck} 
+              title="Enterprise Security" 
+              description="Bank-grade security with tokenization and real-time fraud monitoring for every transaction."
+            />
+            <FeatureCard 
+              icon={Zap} 
+              title="Instant Payouts" 
+              description="Automate your B2C payouts with our robust API. Send money to thousands of customers instantly."
+            />
+            <FeatureCard 
+              icon={TrendingUp} 
+              title="Deep Analytics" 
+              description="Gain insights into your business with real-time transaction tracking and custom reports."
+            />
+            <FeatureCard 
+              icon={Smartphone} 
+              title="Mobile First" 
+              description="Fully responsive checkout experience optimized for mobile users across all devices."
+            />
+            <FeatureCard 
+              icon={Key} 
+              title="Developer API" 
+              description="Integrate in minutes with our clean, well-documented REST API and webhooks."
+            />
+            <FeatureCard 
+              icon={Users} 
+              title="Multi-Merchant" 
+              description="Manage multiple sub-merchants under one master account with ease."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="py-20 px-6 border-y border-surface-100 dark:border-surface-900">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
+          <StatItem label="Transactions" value="10M+" />
+          <StatItem label="Uptime" value="99.99%" />
+          <StatItem label="Merchants" value="2,500+" />
+          <StatItem label="Support" value="24/7" />
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-32 px-6">
+        <div className="max-w-5xl mx-auto bg-bkash rounded-[3rem] p-12 md:p-20 text-center space-y-8 relative overflow-hidden shadow-2xl shadow-bkash/30">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 blur-[80px] rounded-full translate-y-1/2 -translate-x-1/2" />
+          
+          <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-tight">
+            Ready to transform your <br /> payment experience?
+          </h2>
+          <p className="text-white/80 text-lg font-medium max-w-xl mx-auto">
+            Join thousands of businesses already using our gateway to power their bKash payments.
+          </p>
+          <div className="flex flex-col sm:row justify-center gap-4 pt-4">
+            <Link to="/merchant/register" className="bg-white text-bkash font-black px-10 py-5 rounded-2xl transition-all hover:scale-105 active:scale-95 uppercase tracking-widest text-sm shadow-xl">
+              Create Free Account
+            </Link>
+            <Link to="/admin/api-docs" className="bg-black/20 hover:bg-black/30 text-white font-black px-10 py-5 rounded-2xl transition-all uppercase tracking-widest text-sm border border-white/20">
+              Read API Docs
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-20 px-6 border-t border-surface-100 dark:border-surface-900">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
+          <BkashLogo />
+          <div className="flex gap-8 text-sm font-bold text-surface-400">
+            <a href="#" className="hover:text-bkash transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-bkash transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-bkash transition-colors">Contact Us</a>
+          </div>
+          <p className="text-xs font-black uppercase tracking-widest text-surface-300">© 2026 bKash Enterprise. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+const FeatureCard = ({ icon: Icon, title, description }: { icon: any, title: string, description: string }) => (
+  <div className="p-8 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] space-y-6 hover:border-bkash transition-all group shadow-sm hover:shadow-xl hover:shadow-bkash/5">
+    <div className="w-14 h-14 bg-surface-50 dark:bg-surface-950 rounded-2xl flex items-center justify-center group-hover:bg-bkash/10 transition-colors">
+      <Icon className="text-surface-400 group-hover:text-bkash transition-colors" size={28} />
+    </div>
+    <div className="space-y-3">
+      <h3 className="text-xl font-black tracking-tight">{title}</h3>
+      <p className="text-surface-500 font-medium leading-relaxed">{description}</p>
+    </div>
+  </div>
+);
+
+const StatItem = ({ label, value }: { label: string, value: string }) => (
+  <div className="space-y-2">
+    <p className="text-4xl md:text-5xl font-black text-surface-900 dark:text-white tracking-tighter">{value}</p>
+    <p className="text-[10px] font-black uppercase tracking-widest text-surface-400">{label}</p>
+  </div>
+);
+
 const Checkout = () => {
   const [searchParams] = useSearchParams();
   const merchantId = searchParams.get("mid");
@@ -4524,14 +4740,20 @@ const MerchantRegister = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-bkash" />
+    <div className="min-h-screen bg-surface-50 dark:bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Decorations */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-bkash/10 blur-[120px] rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full" />
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative z-10"
+        className="w-full max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[3rem] p-8 md:p-12 shadow-2xl relative z-10"
       >
         <div className="flex flex-col items-center mb-10">
+          <Link to="/" className="mb-8">
+            <BkashLogo />
+          </Link>
           <div className="w-20 h-20 bg-bkash rounded-3xl flex items-center justify-center shadow-2xl shadow-bkash/30 mb-6 rotate-3">
             <UserPlus className="text-white" size={40} />
           </div>
@@ -4542,42 +4764,42 @@ const MerchantRegister = () => {
         <form onSubmit={handleRegister} className="space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Business Name</label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">Business Name</label>
               <div className="relative group">
                 <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="text" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="input-field py-4 pl-12" 
+                  className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all" 
                   placeholder="Acme Corp"
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Email Address</label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">Email Address</label>
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-field py-4 pl-12" 
+                  className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all" 
                   placeholder="merchant@example.com"
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Password</label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 ml-1">Password</label>
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-field py-4 pl-12" 
+                  className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all" 
                   placeholder="••••••••"
                   required
                 />
@@ -4588,16 +4810,21 @@ const MerchantRegister = () => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full btn-primary py-4 rounded-xl"
+            className="w-full bg-bkash hover:bg-bkash-dark text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-bkash/30 uppercase tracking-widest text-xs flex items-center justify-center gap-3"
           >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Create Merchant Account"}
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
+              <>
+                <span>Create Merchant Account</span>
+                <ChevronRight size={16} />
+              </>
+            )}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <p className="text-sm text-surface-500">
+        <div className="mt-10 text-center">
+          <p className="text-sm text-surface-500 font-medium">
             Already have an account?{" "}
-            <Link to="/admin/login" className="text-bkash font-bold hover:underline">
+            <Link to="/admin/login" className="text-bkash font-black hover:underline">
               Sign In
             </Link>
           </p>
@@ -6048,7 +6275,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     navigate("/");
   };
 
-  const isCheckoutOnly = pathname === "/" || pathname === "/payment-success" || pathname === "/payment-failed";
+  const isCheckoutOnly = pathname === "/" || pathname === "/pay" || pathname === "/merchant/register" || pathname === "/payment-success" || pathname === "/payment-failed";
   const isAdminLogin = pathname === "/admin/login";
 
   if (isCheckoutOnly || isAdminLogin) {
@@ -6228,7 +6455,8 @@ export default function App() {
           <Route path="/*" element={
             <Layout>
               <Routes>
-                <Route path="/" element={<Checkout />} />
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/pay" element={<Checkout />} />
                 <Route path="/merchant/register" element={<MerchantRegister />} />
                 <Route path="/admin" element={<Dashboard />} />
                 <Route path="/admin/login" element={<AdminLogin />} />

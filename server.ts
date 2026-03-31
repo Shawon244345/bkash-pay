@@ -90,9 +90,10 @@ const initDatabaseConnection = async () => {
 const db = {
   run: async (sql: string, ...params: any[]) => {
     if (dbType === 'mysql') {
-      await mysqlPool.query(sql, params);
+      const [result] = await mysqlPool.query(sql, params);
+      return result;
     } else {
-      sqliteDb.prepare(sql).run(params);
+      return sqliteDb.prepare(sql).run(params);
     }
   },
   get: async (sql: string, ...params: any[]) => {
@@ -800,12 +801,36 @@ app.post("/api/bkash/create-payment", async (req, res) => {
   }
 });
 
-app.post("/api/bkash/b2c-payment", authenticateToken, async (req, res) => {
+app.post("/api/bkash/b2c-payment", authenticateToken, async (req: any, res) => {
   try {
-    const { amount, receiverMSISDN, invoice, merchantId } = req.body;
+    const { amount, receiverMSISDN, invoice, merchantId: targetMerchantId } = req.body;
+    const user = req.user;
     
-    if (!amount || !receiverMSISDN || !invoice) {
-      return res.status(400).json({ error: "Amount, Receiver MSISDN, and Invoice Number are required" });
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ error: "Valid amount is required" });
+    }
+    if (!receiverMSISDN || !invoice) {
+      return res.status(400).json({ error: "Receiver MSISDN and Invoice Number are required" });
+    }
+
+    // Determine which merchant's balance to check/deduct
+    let merchantId = targetMerchantId;
+    if (user.role === 'merchant') {
+      // Merchants can only payout from their own balance
+      merchantId = user.merchant_id;
+    } else if (user.role === 'admin') {
+      // Admins can payout for any merchant, but must specify which one
+      if (!merchantId) {
+        return res.status(400).json({ error: "Merchant ID is required for admin-initiated payouts" });
+      }
+    } else {
+      return res.status(403).json({ error: "Unauthorized: Insufficient permissions" });
+    }
+
+    // Balance check
+    const merchant = await db.get("SELECT balance FROM merchants WHERE id = ?", merchantId);
+    if (!merchant || merchant.balance < Number(amount)) {
+      return res.status(400).json({ error: "Insufficient merchant balance to process payout" });
     }
 
     const headers = await getBkashHeaders(merchantId);
@@ -836,8 +861,18 @@ app.post("/api/bkash/b2c-payment", authenticateToken, async (req, res) => {
     await logToFile("bKash B2C Response", data);
 
     if (data.transactionStatus === 'Completed' || data.transactionStatus === 'Success') {
-      // Record the payout in transactions table or a separate payouts table
-      // For now, using transactions table with a specific status
+      // Deduct from merchant balance
+      const updateResult = await db.run(
+        "UPDATE merchants SET balance = balance - ? WHERE id = ? AND balance >= ?",
+        Number(amount), merchantId, Number(amount)
+      );
+      
+      if (dbType === 'sqlite' ? (updateResult as any).changes === 0 : (updateResult as any).affectedRows === 0) {
+        console.error(`CRITICAL: Balance deduction failed for merchant ${merchantId} after successful bKash B2C payout!`);
+        await logToFile("CRITICAL_BALANCE_MISMATCH_B2C", { merchant_id: merchantId, amount, invoice });
+      }
+
+      // Record the payout in transactions table
       await db.run(
         "INSERT INTO transactions (id, payment_id, trx_id, amount, status, customer_msisdn, merchant_invoice, merchant_id, payment_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
         uuidv4(), `B2C-${uuidv4().slice(0, 8)}`, data.trxID, amount, "payout_completed", receiverMSISDN, invoice, merchantId, 'B2C'
@@ -887,13 +922,20 @@ app.get("/api/bkash/callback", async (req, res) => {
       await logToFile("bKash Execute Response", data);
 
       if (data.statusCode === "0000") {
+        // Check if already completed to prevent double-crediting
+        const existingTx = await db.get("SELECT status, amount FROM transactions WHERE payment_id = ?", paymentID);
+        if (existingTx && existingTx.status === 'completed') {
+          console.log(`Payment ${paymentID} already completed, skipping balance update.`);
+          return res.redirect(`/payment-success?trxID=${data.trxID}&amount=${data.amount}`);
+        }
+
         await db.run("UPDATE transactions SET status = ?, trx_id = ?, customer_msisdn = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?", "completed", data.trxID, data.customerMsisdn, paymentID);
         
         // Update merchant balance if using GLOBAL mode
-        if (merchantId) {
+        if (merchantId && data.amount && Number(data.amount) > 0) {
           const merchant = await db.get("SELECT payment_mode FROM merchants WHERE id = ?", merchantId);
           if (merchant && merchant.payment_mode === 'GLOBAL') {
-            await db.run("UPDATE merchants SET balance = balance + ? WHERE id = ?", data.amount, merchantId);
+            await db.run("UPDATE merchants SET balance = balance + ? WHERE id = ?", Number(data.amount), merchantId);
             await auditLog("BALANCE_INCREMENT", "system", `Merchant ${merchantId} balance increased by ${data.amount} for payment ${paymentID}`);
           }
         }
@@ -1122,22 +1164,34 @@ app.post("/api/merchant/withdrawals", authenticateToken, authorizeRole(['merchan
   if (!merchantId) return res.status(400).json({ error: "Not a merchant account" });
 
   const { payout_account_id, amount } = req.body;
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    return res.status(400).json({ error: "Valid withdrawal amount is required" });
+  }
+
   try {
     const merchant = await db.get("SELECT balance FROM merchants WHERE id = ?", merchantId);
-    if (!merchant || merchant.balance < amount) {
+    if (!merchant || merchant.balance < Number(amount)) {
       return res.status(400).json({ error: "Insufficient balance" });
     }
     
     const id = uuidv4();
     await db.exec("BEGIN TRANSACTION");
     try {
-      await db.run("UPDATE merchants SET balance = balance - ? WHERE id = ?", amount, merchantId);
+      const updateResult = await db.run(
+        "UPDATE merchants SET balance = balance - ? WHERE id = ? AND balance >= ?", 
+        Number(amount), merchantId, Number(amount)
+      );
+      
+      if (dbType === 'sqlite' ? (updateResult as any).changes === 0 : (updateResult as any).affectedRows === 0) {
+        throw new Error("Insufficient balance at time of update");
+      }
+
       await db.run("INSERT INTO withdrawals (id, merchant_id, payout_account_id, amount) VALUES (?, ?, ?, ?)", id, merchantId, payout_account_id, amount);
       await db.exec("COMMIT");
       res.json({ success: true, id });
-    } catch (e) {
+    } catch (e: any) {
       await db.exec("ROLLBACK");
-      res.status(500).json({ error: "Withdrawal failed" });
+      res.status(400).json({ error: e.message || "Withdrawal failed" });
     }
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
@@ -1571,11 +1625,20 @@ app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
     const ip = req.ip || req.headers['x-forwarded-for'] || "";
     const initiated_by = user.username;
     
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ error: "Valid refund amount is required" });
+    }
+
     // Check transaction ownership and mode
-    const transaction = await db.get("SELECT merchant_id, payment_mode FROM transactions WHERE trx_id = ?", trxID);
+    const transaction = await db.get("SELECT merchant_id, payment_mode, amount as original_amount FROM transactions WHERE trx_id = ?", trxID);
     
     if (!transaction) {
       return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Ensure refund amount doesn't exceed original amount
+    if (Number(amount) > Number(transaction.original_amount)) {
+      return res.status(400).json({ error: "Refund amount cannot exceed original transaction amount" });
     }
 
     // Strict rule: Super Admin cannot refund ANY transaction belonging to a merchant
@@ -1594,6 +1657,14 @@ app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
     const existing = await db.get("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'", trxID);
     if (existing) {
       return res.status(400).json({ error: "This transaction has already been refunded" });
+    }
+
+    // Balance check for merchants
+    if (transaction.merchant_id) {
+      const merchant = await db.get("SELECT balance FROM merchants WHERE id = ?", transaction.merchant_id);
+      if (!merchant || merchant.balance < Number(amount)) {
+        return res.status(400).json({ error: "Insufficient merchant balance to process refund" });
+      }
     }
 
     const headers = await getBkashHeaders();
@@ -1621,6 +1692,21 @@ app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
     const status = responseData.refundTrxID ? "COMPLETED" : "FAILED";
     const refundID = responseData.refundTrxID || `FAIL-${uuidv4().slice(0, 8)}`;
     const executionTime = responseData.completedTime || null;
+
+    if (status === "COMPLETED" && transaction.merchant_id) {
+      // Deduct from merchant balance
+      const updateResult = await db.run(
+        "UPDATE merchants SET balance = balance - ? WHERE id = ? AND balance >= ?",
+        Number(amount), transaction.merchant_id, Number(amount)
+      );
+      
+      // If for some reason the balance was depleted between check and update (unlikely but possible)
+      // We still proceed since bKash already processed it, but we should log it.
+      if (dbType === 'sqlite' ? (updateResult as any).changes === 0 : (updateResult as any).affectedRows === 0) {
+        console.error(`CRITICAL: Balance deduction failed for merchant ${transaction.merchant_id} after successful bKash refund!`);
+        await logToFile("CRITICAL_BALANCE_MISMATCH", { merchant_id: transaction.merchant_id, amount, trxID });
+      }
+    }
 
     await db.run(`
       INSERT INTO refunds (id, refund_id, original_trx_id, original_payment_id, amount, refund_amount, status, reason, sku, refund_execution_time, response_data, ip_address, initiated_by, merchant_id)
