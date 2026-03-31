@@ -71,6 +71,9 @@ import {
   Shield,
   UserX,
   UserCheck,
+  Send,
+  Banknote,
+  Hash,
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -5783,6 +5786,149 @@ const UserManagement = () => {
   );
 };
 
+const B2CPayout = () => {
+  const [amount, setAmount] = useState("");
+  const [receiverMSISDN, setReceiverMSISDN] = useState("");
+  const [invoice, setInvoice] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const handlePayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const res = await secureFetch("/api/bkash/b2c-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          receiverMSISDN,
+          invoice,
+          merchantId: localStorage.getItem("merchant_id")
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (res.ok && data.statusCode === "0000") {
+        toast.success("B2C Payout successful!");
+        setAmount("");
+        setReceiverMSISDN("");
+        setInvoice("");
+      } else {
+        toast.error(data.statusMessage || data.error || "Payout failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-8">
+      <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-[2.5rem] p-8 md:p-12 shadow-sm">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 bg-bkash/10 rounded-2xl flex items-center justify-center text-bkash">
+            <Send size={24} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-black text-surface-900 dark:text-white tracking-tight">B2C Payout</h3>
+            <p className="text-surface-500 text-sm font-medium">Send money directly to a bKash customer.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handlePayout} className="space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Receiver MSISDN</label>
+              <div className="relative group">
+                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="text" 
+                  value={receiverMSISDN}
+                  onChange={(e) => setReceiverMSISDN(e.target.value)}
+                  className="input-field py-4 pl-12" 
+                  placeholder="01XXXXXXXXX"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Amount (BDT)</label>
+              <div className="relative group">
+                <Banknote className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="number" 
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="input-field py-4 pl-12" 
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest ml-1">Invoice Number</label>
+              <div className="relative group">
+                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
+                <input 
+                  type="text" 
+                  value={invoice}
+                  onChange={(e) => setInvoice(e.target.value)}
+                  className="input-field py-4 pl-12" 
+                  placeholder="INV-123456"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="w-full btn-primary py-4 rounded-xl shadow-xl shadow-bkash/20"
+          >
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Send Payout"}
+          </button>
+        </form>
+
+        {result && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "mt-8 p-6 rounded-2xl border",
+              result.statusCode === "0000" ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"
+            )}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-xs font-black uppercase tracking-widest text-surface-500">Payout Status</span>
+              <span className={cn(
+                "px-3 py-1 rounded-lg text-[10px] font-black uppercase",
+                result.statusCode === "0000" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+              )}>
+                {result.statusCode === "0000" ? "Success" : "Failed"}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-surface-500">Transaction ID</span>
+                <span className="font-bold text-surface-900 dark:text-white">{result.trxID || "N/A"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-surface-500">Message</span>
+                <span className="font-medium text-surface-700 dark:text-surface-300">{result.statusMessage}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -5869,6 +6015,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           "settings": "settings",
           "profile": "profile",
           "api-docs": "api-docs",
+          "b2c-payout": "transactions",
           "withdrawals": "withdrawals",
           "subscriptions": "subscriptions"
         };
@@ -5939,6 +6086,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           {hasPermission('kyc') && <SidebarItem icon={ShieldCheck} label="KYC Verification" active={pathname === '/admin/kyc'} onClick={() => handleNavClick('/admin/kyc')} />}
           {hasPermission('merchants') && <SidebarItem icon={Users} label="Merchants" active={pathname === '/admin/merchants'} onClick={() => handleNavClick('/admin/merchants')} />}
           {hasPermission('transactions') && <SidebarItem icon={History} label="Payments" active={pathname === '/admin/transactions'} onClick={() => handleNavClick('/admin/transactions')} />}
+          {hasPermission('transactions') && <SidebarItem icon={Send} label="B2C Payout" active={pathname === '/admin/b2c-payout'} onClick={() => handleNavClick('/admin/b2c-payout')} />}
           {hasPermission('search') && <SidebarItem icon={Search} label="Search Details" active={pathname === '/admin/search'} onClick={() => handleNavClick('/admin/search')} />}
           {hasPermission('refunds') && <SidebarItem icon={RotateCcw} label="Refunds" active={pathname === '/admin/refunds'} onClick={() => handleNavClick('/admin/refunds')} />}
           {hasPermission('logs') && <SidebarItem icon={Terminal} label="System Logs" active={pathname === '/admin/logs'} onClick={() => handleNavClick('/admin/logs')} />}
@@ -5989,6 +6137,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin/kyc' && "KYC Verification"}
               {pathname === '/admin/merchants' && "Merchant Management"}
               {pathname === '/admin/refunds' && "Refund Management"}
+              {pathname === '/admin/b2c-payout' && "B2C Payout"}
               {pathname === '/admin/search' && "Transaction Search"}
               {pathname === '/admin/transactions' && "Payment History"}
               {pathname === '/admin/settings' && "System Settings"}
@@ -6084,6 +6233,7 @@ export default function App() {
                 <Route path="/admin" element={<Dashboard />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin/refunds" element={<Refunds />} />
+                <Route path="/admin/b2c-payout" element={<B2CPayout />} />
                 <Route path="/admin/search" element={<SearchTransaction />} />
                 <Route path="/admin/transactions" element={<Transactions />} />
                 <Route path="/admin/settings" element={<SettingsPage />} />

@@ -1,6 +1,6 @@
 import express from "express";
 import mysql from "mysql2/promise";
-import sqlite3 from "sqlite3";
+import Database from "better-sqlite3";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -82,7 +82,7 @@ const initDatabaseConnection = async () => {
 
   if (dbType === 'sqlite') {
     const dbPath = path.join(process.cwd(), "payments.db");
-    sqliteDb = new sqlite3.Database(dbPath);
+    sqliteDb = new Database(dbPath);
     console.log(`SQLite database initialized at ${dbPath}`);
   }
 };
@@ -92,9 +92,7 @@ const db = {
     if (dbType === 'mysql') {
       await mysqlPool.query(sql, params);
     } else {
-      return new Promise<void>((resolve, reject) => {
-        sqliteDb.run(sql.replace(/\?/g, '?'), params, (err: any) => err ? reject(err) : resolve());
-      });
+      sqliteDb.prepare(sql).run(params);
     }
   },
   get: async (sql: string, ...params: any[]) => {
@@ -102,9 +100,7 @@ const db = {
       const [rows] = await mysqlPool.query(sql, params);
       return (rows as any[])[0];
     } else {
-      return new Promise<any>((resolve, reject) => {
-        sqliteDb.get(sql, params, (err: any, row: any) => err ? reject(err) : resolve(row));
-      });
+      return sqliteDb.prepare(sql).get(params);
     }
   },
   all: async (sql: string, ...params: any[]) => {
@@ -112,18 +108,14 @@ const db = {
       const [rows] = await mysqlPool.query(sql, params);
       return rows as any[];
     } else {
-      return new Promise<any[]>((resolve, reject) => {
-        sqliteDb.all(sql, params, (err: any, rows: any[]) => err ? reject(err) : resolve(rows));
-      });
+      return sqliteDb.prepare(sql).all(params);
     }
   },
   exec: async (sql: string) => {
     if (dbType === 'mysql') {
       await mysqlPool.query(sql);
     } else {
-      return new Promise<void>((resolve, reject) => {
-        sqliteDb.exec(sql, (err: any) => err ? reject(err) : resolve());
-      });
+      sqliteDb.exec(sql);
     }
   }
 };
@@ -339,6 +331,7 @@ const initDb = async () => {
     { key: 'BKASH_USERNAME', value: '01997473177' },
     { key: 'BKASH_PASSWORD', value: 'V9^@JbA_$6x' },
     { key: 'BKASH_BASE_URL', value: 'https://tokenized.pay.bka.sh/v1.2.0-beta' },
+    { key: 'BKASH_B2C_URL', value: 'https://checkout.bka.sh/v1.2.0-beta/checkout/payment/b2cPayment' },
     { key: 'APP_URL', value: process.env.APP_URL || "https://ais-dev-zo4o2htltqug2iq63omyd6-115395507089.asia-east1.run.app" },
     { key: 'ADMIN_USERNAME', value: 'admin' },
     { key: 'ADMIN_PASSWORD', value: 'admin123' }
@@ -349,6 +342,19 @@ const initDb = async () => {
       await db.run("INSERT IGNORE INTO settings (`key`, value) VALUES (?, ?)", s.key, s.value);
     } else {
       await db.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", s.key, s.value);
+    }
+    // Migration: Update to production if currently set to sandbox
+    if (s.key === 'BKASH_BASE_URL' && s.value === 'https://tokenized.pay.bka.sh/v1.2.0-beta') {
+       const current = await db.get("SELECT value FROM settings WHERE key = 'BKASH_BASE_URL'");
+       if (current && current.value.includes('sandbox')) {
+          await db.run("UPDATE settings SET value = ? WHERE key = 'BKASH_BASE_URL'", s.value);
+       }
+    }
+    if (s.key === 'BKASH_B2C_URL' && s.value === 'https://checkout.bka.sh/v1.2.0-beta/checkout/payment/b2cPayment') {
+       const current = await db.get("SELECT value FROM settings WHERE key = 'BKASH_B2C_URL'");
+       if (current && current.value.includes('sandbox')) {
+          await db.run("UPDATE settings SET value = ? WHERE key = 'BKASH_B2C_URL'", s.value);
+       }
     }
   }
 
@@ -743,6 +749,7 @@ const getBkashHeaders = async (merchantId?: string) => {
     "Content-Type": "application/json",
     Authorization: data.id_token,
     "X-APP-Key": appKey,
+    "X-App-Key": appKey, // Add variant for case-sensitivity
   };
 };
 
@@ -790,6 +797,70 @@ app.post("/api/bkash/create-payment", async (req, res) => {
   } catch (error: any) {
     console.error("bKash Create Error:", error.response?.data || error.message);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/api/bkash/b2c-payment", authenticateToken, async (req, res) => {
+  try {
+    const { amount, receiverMSISDN, invoice, merchantId } = req.body;
+    
+    if (!amount || !receiverMSISDN || !invoice) {
+      return res.status(400).json({ error: "Amount, Receiver MSISDN, and Invoice Number are required" });
+    }
+
+    const headers = await getBkashHeaders(merchantId);
+    const b2cUrl = await getSetting("BKASH_B2C_URL");
+    
+    // Some bKash B2C APIs require 'Bearer ' prefix
+    const b2cHeaders = {
+      ...headers,
+      Authorization: headers.Authorization.startsWith("Bearer ") ? headers.Authorization : `Bearer ${headers.Authorization}`
+    };
+
+    console.log("Initiating bKash B2C Payout...");
+    console.log("URL:", b2cUrl);
+    console.log("Headers (sanitized):", { ...b2cHeaders, Authorization: "REDACTED" });
+
+    const { data } = await axios.post(
+      b2cUrl,
+      {
+        amount: amount.toString(),
+        currency: "BDT",
+        merchantInvoiceNumber: invoice,
+        receiverMSISDN: receiverMSISDN,
+      },
+      { headers: b2cHeaders }
+    );
+
+    console.log("bKash B2C Response:", data);
+    await logToFile("bKash B2C Response", data);
+
+    if (data.transactionStatus === 'Completed' || data.transactionStatus === 'Success') {
+      // Record the payout in transactions table or a separate payouts table
+      // For now, using transactions table with a specific status
+      await db.run(
+        "INSERT INTO transactions (id, payment_id, trx_id, amount, status, customer_msisdn, merchant_invoice, merchant_id, payment_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+        uuidv4(), `B2C-${uuidv4().slice(0, 8)}`, data.trxID, amount, "payout_completed", receiverMSISDN, invoice, merchantId, 'B2C'
+      );
+      
+      res.json(data);
+    } else {
+      res.status(400).json({ error: data.statusMessage || "B2C Payment failed", details: data });
+    }
+  } catch (error: any) {
+    console.error("bKash B2C Error:", error.response?.data || error.message);
+    
+    const errorDetails = error.response?.data || error.message;
+    let errorMessage = "Internal Server Error";
+    
+    if (error.response?.status === 401 || (typeof errorDetails === 'object' && errorDetails.message === 'Unauthorized')) {
+      errorMessage = "bKash API Unauthorized. Please check your credentials (App Key, App Secret, Username, Password) and ensure they have B2C permissions.";
+    }
+
+    res.status(error.response?.status || 500).json({ 
+      error: errorMessage, 
+      details: errorDetails 
+    });
   }
 });
 
