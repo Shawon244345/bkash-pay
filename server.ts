@@ -296,6 +296,19 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+    CREATE TABLE IF NOT EXISTS agreements (
+      id ${textType} PRIMARY KEY,
+      merchant_id ${textType},
+      agreement_id ${textType},
+      payment_id ${textType},
+      customer_msisdn ${textType},
+      payer_reference ${textType},
+      status ${textType},
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      executed_at DATETIME,
+      voided_at DATETIME,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id)
+    );
     CREATE TABLE IF NOT EXISTS system_versions (
       id ${textType} PRIMARY KEY,
       version_name ${textType},
@@ -753,6 +766,251 @@ const getBkashHeaders = async (merchantId?: string) => {
     "X-App-Key": appKey, // Add variant for case-sensitivity
   };
 };
+
+// bKash Tokenized Checkout API Routes
+
+app.post("/api/bkash/token/grant", async (req, res) => {
+  try {
+    const { merchantId } = req.body;
+    let appKey, appSecret, username, password;
+
+    if (merchantId) {
+      const merchant = await db.get("SELECT * FROM merchants WHERE id = ?", merchantId);
+      if (merchant && merchant.payment_mode === 'OWN') {
+        appKey = merchant.bkash_app_key;
+        appSecret = merchant.bkash_app_secret;
+        username = merchant.bkash_username;
+        password = merchant.bkash_password;
+      }
+    }
+
+    if (!appKey) appKey = await getSetting("BKASH_APP_KEY");
+    if (!appSecret) appSecret = await getSetting("BKASH_APP_SECRET");
+    if (!username) username = await getSetting("BKASH_USERNAME");
+    if (!password) password = await getSetting("BKASH_PASSWORD");
+
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/token/grant`,
+      {
+        app_key: appKey,
+        app_secret: appSecret,
+      },
+      {
+        headers: {
+          username: username,
+          password: password,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      }
+    );
+
+    await logToFile("bKash Grant Token Response", data);
+    res.json(data);
+  } catch (error: any) {
+    console.error("bKash Grant Token Error:", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { error: "Internal Server Error" });
+  }
+});
+
+app.post("/api/bkash/token/refresh", async (req, res) => {
+  try {
+    const { merchantId, refresh_token } = req.body;
+    let appKey, appSecret, username, password;
+
+    if (merchantId) {
+      const merchant = await db.get("SELECT * FROM merchants WHERE id = ?", merchantId);
+      if (merchant && merchant.payment_mode === 'OWN') {
+        appKey = merchant.bkash_app_key;
+        appSecret = merchant.bkash_app_secret;
+        username = merchant.bkash_username;
+        password = merchant.bkash_password;
+      }
+    }
+
+    if (!appKey) appKey = await getSetting("BKASH_APP_KEY");
+    if (!appSecret) appSecret = await getSetting("BKASH_APP_SECRET");
+    if (!username) username = await getSetting("BKASH_USERNAME");
+    if (!password) password = await getSetting("BKASH_PASSWORD");
+
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/token/refresh`,
+      {
+        app_key: appKey,
+        app_secret: appSecret,
+        refresh_token: refresh_token,
+      },
+      {
+        headers: {
+          username: username,
+          password: password,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      }
+    );
+
+    await logToFile("bKash Refresh Token Response", data);
+    res.json(data);
+  } catch (error: any) {
+    console.error("bKash Refresh Token Error:", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { error: "Internal Server Error" });
+  }
+});
+
+app.post("/api/bkash/agreement/create", async (req, res) => {
+  try {
+    const { merchantId, payerReference } = req.body;
+    const headers = await getBkashHeaders(merchantId);
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+    const appUrl = await getSetting("APP_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/create`,
+      {
+        mode: "0000",
+        payerReference: payerReference,
+        callbackURL: `${appUrl}/api/bkash/agreement/callback?mid=${merchantId || ''}`,
+      },
+      { headers }
+    );
+
+    await logToFile("bKash Create Agreement Response", data);
+
+    if (data.paymentID && data.bkashURL) {
+      await db.run(
+        "INSERT INTO agreements (id, merchant_id, payment_id, payer_reference, status) VALUES (?, ?, ?, ?, ?)",
+        uuidv4(), merchantId, data.paymentID, payerReference, "initiated"
+      );
+      res.json({ bkashURL: data.bkashURL, paymentID: data.paymentID });
+    } else {
+      res.status(400).json(data);
+    }
+  } catch (error: any) {
+    console.error("bKash Create Agreement Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/bkash/agreement/callback", async (req, res) => {
+  const { paymentID, status, mid } = req.query;
+  const merchantId = mid as string;
+  await logToFile("bKash Agreement Callback Received", { paymentID, status, merchantId });
+
+  if (!paymentID) {
+    return res.redirect("/agreement-failed?error=missing_payment_id");
+  }
+
+  if (status === "success") {
+    try {
+      const headers = await getBkashHeaders(merchantId);
+      const baseUrl = await getSetting("BKASH_BASE_URL");
+      
+      const { data } = await axios.post(
+        `${baseUrl}/tokenized/checkout/execute`,
+        { paymentID },
+        { headers }
+      );
+
+      await logToFile("bKash Execute Agreement Response", data);
+
+      if (data.statusCode === "0000") {
+        await db.run(
+          "UPDATE agreements SET status = ?, agreement_id = ?, customer_msisdn = ?, executed_at = CURRENT_TIMESTAMP WHERE payment_id = ?",
+          "completed", data.agreementID, data.customerMsisdn, paymentID
+        );
+        
+        const params = new URLSearchParams({
+          agreementID: data.agreementID,
+          customer: data.customerMsisdn || "",
+          status: "success"
+        });
+        return res.redirect(`/admin/agreements?status=success&agreementID=${data.agreementID}`);
+      } else {
+        await db.run("UPDATE agreements SET status = ? WHERE payment_id = ?", "failed", paymentID);
+        return res.redirect("/admin/agreements?status=failed&error=" + (data.statusMessage || "Execution failed"));
+      }
+    } catch (error: any) {
+      await logToFile("bKash Execute Agreement Error", error.response?.data || error.message);
+      return res.redirect("/admin/agreements?status=failed&error=execution_api_error");
+    }
+  }
+  
+  await db.run("UPDATE agreements SET status = ? WHERE payment_id = ?", status || "failed", paymentID);
+  res.redirect("/admin/agreements?status=failed&bkash_status=" + (status || "unknown"));
+});
+
+app.get("/api/bkash/agreements", authenticateToken, async (req, res) => {
+  const { merchantId } = req.query;
+  const user = (req as any).user;
+
+  // If merchant, only allow their own agreements
+  if (user.role === 'merchant' && user.merchant_id !== merchantId) {
+    return res.status(403).json({ error: "Unauthorized access to merchant agreements" });
+  }
+
+  try {
+    const agreements = await db.all(
+      "SELECT * FROM agreements WHERE merchant_id = ? ORDER BY created_at DESC",
+      merchantId
+    );
+    res.json(agreements);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch agreements" });
+  }
+});
+
+app.post("/api/bkash/agreement/status", async (req, res) => {
+  try {
+    const { merchantId, agreementID } = req.body;
+    const headers = await getBkashHeaders(merchantId);
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/agreement/status`,
+      { agreementID },
+      { headers }
+    );
+
+    await logToFile("bKash Query Agreement Response", data);
+    res.json(data);
+  } catch (error: any) {
+    console.error("bKash Query Agreement Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/api/bkash/agreement/cancel", async (req, res) => {
+  try {
+    const { merchantId, agreementID } = req.body;
+    const headers = await getBkashHeaders(merchantId);
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const { data } = await axios.post(
+      `${baseUrl}/tokenized/checkout/agreement/cancel`,
+      { agreementID },
+      { headers }
+    );
+
+    await logToFile("bKash Cancel Agreement Response", data);
+    
+    if (data.statusCode === "0000") {
+      await db.run(
+        "UPDATE agreements SET status = ?, voided_at = CURRENT_TIMESTAMP WHERE agreement_id = ?",
+        "cancelled", agreementID
+      );
+    }
+    
+    res.json(data);
+  } catch (error: any) {
+    console.error("bKash Cancel Agreement Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 // API Routes
 app.post("/api/bkash/create-payment", async (req, res) => {

@@ -73,6 +73,7 @@ import {
   UserCheck,
   Send,
   Banknote,
+  Handshake,
   Hash,
 } from "lucide-react";
 import { 
@@ -272,6 +273,16 @@ interface Refund {
   response_data: string;
   ip_address: string;
   initiated_by: string;
+  created_at: string;
+}
+
+interface Agreement {
+  id: string;
+  merchant_id: string;
+  agreement_id: string;
+  payer_reference: string;
+  customer_msisdn: string;
+  status: string;
   created_at: string;
 }
 
@@ -6156,6 +6167,204 @@ const B2CPayout = () => {
   );
 };
 
+const Agreements = () => {
+  const [agreements, setAgreements] = useState<Agreement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [payerReference, setPayerReference] = useState("");
+  const [searchParams] = useSearchParams();
+
+  const fetchAgreements = async () => {
+    setLoading(true);
+    try {
+      const merchantId = localStorage.getItem("merchant_id");
+      const res = await secureFetch(`/api/bkash/agreements?merchantId=${merchantId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setAgreements(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch agreements:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAgreements();
+
+    const status = searchParams.get("status");
+    const error = searchParams.get("error");
+    const agreementID = searchParams.get("agreementID");
+
+    if (status === "success") {
+      toast.success(`Agreement ${agreementID} created successfully!`);
+    } else if (status === "failed") {
+      toast.error(`Agreement creation failed: ${error || "Unknown error"}`);
+    }
+  }, [searchParams]);
+
+  const handleCreateAgreement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payerReference) {
+      toast.error("Payer Reference is required");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const merchantId = localStorage.getItem("merchant_id");
+      const res = await secureFetch("/api/bkash/agreement/create", {
+        method: "POST",
+        body: JSON.stringify({
+          merchantId,
+          payerReference,
+          callbackURL: `${window.location.origin}/admin/agreements`
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.bkashURL) {
+        window.location.href = data.bkashURL;
+      } else {
+        toast.error(data.message || "Failed to create agreement");
+      }
+    } catch (err) {
+      console.error("Agreement creation error:", err);
+      toast.error("An error occurred");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCancelAgreement = async (agreementId: string) => {
+    if (!confirm("Are you sure you want to cancel this agreement?")) return;
+
+    try {
+      const res = await secureFetch("/api/bkash/agreement/cancel", {
+        method: "POST",
+        body: JSON.stringify({ agreementID: agreementId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Agreement cancelled successfully");
+        fetchAgreements();
+      } else {
+        toast.error(data.message || "Failed to cancel agreement");
+      }
+    } catch (err) {
+      console.error("Agreement cancellation error:", err);
+      toast.error("An error occurred");
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bkash-card p-8">
+        <h3 className="text-xl font-black tracking-tighter mb-6 flex items-center gap-3">
+          <div className="p-2 bg-bkash/10 rounded-xl">
+            <Plus size={20} className="text-bkash" />
+          </div>
+          Create New Agreement
+        </h3>
+        <form onSubmit={handleCreateAgreement} className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-surface-400 mb-2 block">Payer Reference (e.g. Wallet Number)</label>
+            <div className="relative group">
+              <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-bkash transition-colors" size={18} />
+              <input 
+                type="text" 
+                value={payerReference}
+                onChange={(e) => setPayerReference(e.target.value)}
+                placeholder="017XXXXXXXX" 
+                className="w-full bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl py-3.5 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-bkash/30 focus:border-bkash transition-all"
+              />
+            </div>
+          </div>
+          <div className="flex items-end">
+            <button 
+              type="submit"
+              disabled={creating}
+              className="w-full md:w-auto bg-bkash text-white px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-bkash/90 transition-all shadow-lg shadow-bkash/25 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {creating ? <Loader2 className="animate-spin" size={18} /> : <Handshake size={18} />}
+              Create Agreement
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bkash-card overflow-hidden">
+        <div className="p-8 border-b border-surface-100 dark:border-surface-900 flex justify-between items-center">
+          <h3 className="font-black text-xl tracking-tighter">Active Agreements</h3>
+          <button 
+            onClick={fetchAgreements}
+            className="p-2 text-surface-400 hover:text-bkash transition-colors"
+          >
+            <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-surface-50 dark:bg-surface-900/50 border-b border-surface-100 dark:border-surface-900">
+                <th className="py-4 px-8 text-[10px] font-black uppercase tracking-widest text-surface-400">Agreement ID</th>
+                <th className="py-4 px-8 text-[10px] font-black uppercase tracking-widest text-surface-400">Customer MSISDN</th>
+                <th className="py-4 px-8 text-[10px] font-black uppercase tracking-widest text-surface-400">Status</th>
+                <th className="py-4 px-8 text-[10px] font-black uppercase tracking-widest text-surface-400">Created At</th>
+                <th className="py-4 px-8 text-[10px] font-black uppercase tracking-widest text-surface-400 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <Loader2 className="animate-spin text-bkash mx-auto" size={32} />
+                  </td>
+                </tr>
+              ) : agreements.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center text-surface-400 font-bold">No agreements found</td>
+                </tr>
+              ) : (
+                agreements.map((agreement) => (
+                  <tr key={agreement.id} className="group border-b border-surface-100 dark:border-surface-900 hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors">
+                    <td className="py-4 px-8">
+                      <span className="text-surface-900 dark:text-white font-mono text-xs">{agreement.agreement_id}</span>
+                    </td>
+                    <td className="py-4 px-8">
+                      <span className="text-surface-600 dark:text-surface-400 text-sm font-medium">{agreement.customer_msisdn}</span>
+                    </td>
+                    <td className="py-4 px-8">
+                      <span className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                        agreement.status === 'Completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                      )}>
+                        {agreement.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-8">
+                      <span className="text-surface-400 text-[10px] font-bold uppercase tracking-widest">{new Date(agreement.created_at).toLocaleString()}</span>
+                    </td>
+                    <td className="py-4 px-8 text-right">
+                      <button 
+                        onClick={() => handleCancelAgreement(agreement.agreement_id)}
+                        className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                        title="Cancel Agreement"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -6275,7 +6484,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     navigate("/");
   };
 
-  const isCheckoutOnly = pathname === "/" || pathname === "/pay" || pathname === "/merchant/register" || pathname === "/payment-success" || pathname === "/payment-failed";
+  const isCheckoutOnly = pathname === "/" || pathname === "/pay" || pathname === "/merchant/register" || pathname === "/payment-success" || pathname === "/payment-failed" || pathname === "/agreements";
   const isAdminLogin = pathname === "/admin/login";
 
   if (isCheckoutOnly || isAdminLogin) {
@@ -6341,6 +6550,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               onClick={() => handleNavClick('/admin/subscriptions')} 
             />
           )}
+          {userRole === 'merchant' && (
+            <SidebarItem 
+              icon={Handshake} 
+              label="Agreements" 
+              active={pathname === '/admin/agreements'} 
+              onClick={() => handleNavClick('/admin/agreements')} 
+            />
+          )}
           <SidebarItem icon={Share2} label="Payment Links" active={pathname === '/generate'} onClick={() => handleNavClick('/generate')} />
         </nav>
         <div className="pt-6 border-t border-surface-200 dark:border-surface-900 flex flex-col gap-1.5">
@@ -6377,6 +6594,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {pathname === '/admin/security' && "Security Center"}
               {pathname === '/admin/users' && "User Management"}
               {pathname === '/admin/api-docs' && "API Documentation"}
+              {pathname === '/admin/agreements' && "bKash Agreements"}
               {pathname === '/admin/withdrawals' && (userRole === 'admin' ? "Withdrawal Requests" : "Withdrawal Management")}
               {pathname === '/admin/subscriptions' && (userRole === 'admin' ? "Subscription Plans" : "Subscription Management")}
               {userRole === 'merchant' && (
@@ -6476,6 +6694,7 @@ export default function App() {
                 <Route path="/admin/merchants" element={<MerchantManagement />} />
                 <Route path="/admin/kyc" element={<KYCVerification />} />
                 <Route path="/admin/api-docs" element={<ApiDocs />} />
+                <Route path="/admin/agreements" element={<Agreements />} />
                 <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
                 <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
                 <Route path="/generate" element={<PaymentLinkGenerator />} />
