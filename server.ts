@@ -87,36 +87,51 @@ const initDatabaseConnection = async () => {
   }
 };
 
+const fixSql = (sql: string) => {
+  if (dbType !== 'mysql') return sql;
+  return sql
+    .replace(/INSERT OR REPLACE/gi, "REPLACE")
+    .replace(/INSERT OR IGNORE/gi, "INSERT IGNORE")
+    .replace(/\bBEGIN TRANSACTION\b/gi, "START TRANSACTION")
+    .replace(/\bkey\b/g, "`key`")
+    .replace(/``key``/g, "`key`")
+    .replace(/'`key`'/g, "'key'");
+};
+
 const db = {
   run: async (sql: string, ...params: any[]) => {
+    const finalSql = fixSql(sql);
     if (dbType === 'mysql') {
-      const [result] = await mysqlPool.query(sql, params);
+      const [result] = await mysqlPool.query(finalSql, params);
       return result;
     } else {
-      return sqliteDb.prepare(sql).run(params);
+      return sqliteDb.prepare(finalSql).run(params);
     }
   },
   get: async (sql: string, ...params: any[]) => {
+    const finalSql = fixSql(sql);
     if (dbType === 'mysql') {
-      const [rows] = await mysqlPool.query(sql, params);
+      const [rows] = await mysqlPool.query(finalSql, params);
       return (rows as any[])[0];
     } else {
-      return sqliteDb.prepare(sql).get(params);
+      return sqliteDb.prepare(finalSql).get(params);
     }
   },
   all: async (sql: string, ...params: any[]) => {
+    const finalSql = fixSql(sql);
     if (dbType === 'mysql') {
-      const [rows] = await mysqlPool.query(sql, params);
+      const [rows] = await mysqlPool.query(finalSql, params);
       return rows as any[];
     } else {
-      return sqliteDb.prepare(sql).all(params);
+      return sqliteDb.prepare(finalSql).all(params);
     }
   },
   exec: async (sql: string) => {
+    const finalSql = fixSql(sql);
     if (dbType === 'mysql') {
-      await mysqlPool.query(sql);
+      await mysqlPool.query(finalSql);
     } else {
-      sqliteDb.exec(sql);
+      sqliteDb.exec(finalSql);
     }
   }
 };
