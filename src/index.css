@@ -5,8 +5,8 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-bkash: #e2136e;
-  --color-bkash-dark: #b10f56;
+  --color-bkash: var(--bkash-color, #e2136e);
+  --color-bkash-dark: var(--bkash-color-dark, #b10f56);
   --color-bkash-light: #fce7f1;
   --color-bkash-soft: #fff0f6;
   

@@ -1995,8 +1995,17 @@ app.get("/api/admin/refunds", authenticateToken, async (req: any, res) => {
   }
 });
 
+app.get("/api/settings/public", async (req, res) => {
+  const keys = ["SITE_NAME", "THEME_COLOR", "SITE_LOGO"];
+  const settings: any = {};
+  for (const key of keys) {
+    settings[key] = await getSetting(key);
+  }
+  res.json(settings);
+});
+
 app.get("/api/admin/settings", authenticateToken, authorizeRole(['admin']), async (req, res) => {
-  const keys = ["BKASH_APP_KEY", "BKASH_APP_SECRET", "BKASH_USERNAME", "BKASH_PASSWORD", "BKASH_BASE_URL", "APP_URL"];
+  const keys = ["BKASH_APP_KEY", "BKASH_APP_SECRET", "BKASH_USERNAME", "BKASH_PASSWORD", "BKASH_BASE_URL", "APP_URL", "SITE_NAME", "THEME_COLOR", "SITE_LOGO"];
   const settings: any = {};
   for (const key of keys) {
     settings[key] = await getSetting(key);

@@ -133,6 +133,73 @@ const secureFetch = async (url: string, options: any = {}) => {
   return response;
 };
 
+// --- Site Settings Context ---
+interface SiteSettings {
+  SITE_NAME: string;
+  THEME_COLOR: string;
+  SITE_LOGO: string;
+}
+
+const SiteSettingsContext = React.createContext<{
+  settings: SiteSettings;
+  updateSettings: (newSettings: Partial<SiteSettings>) => void;
+  refreshSettings: () => Promise<void>;
+}>({
+  settings: {
+    SITE_NAME: "bKash Pay",
+    THEME_COLOR: "#e2136e",
+    SITE_LOGO: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s"
+  },
+  updateSettings: () => {},
+  refreshSettings: async () => {}
+});
+
+const useSiteSettings = () => useContext(SiteSettingsContext);
+
+const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
+  const [settings, setSettings] = useState<SiteSettings>({
+    SITE_NAME: "bKash Pay",
+    THEME_COLOR: "#e2136e",
+    SITE_LOGO: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s"
+  });
+
+  const refreshSettings = async () => {
+    try {
+      const res = await fetch("/api/settings/public");
+      const data = await res.json();
+      setSettings(prev => ({
+        ...prev,
+        SITE_NAME: data.SITE_NAME || prev.SITE_NAME,
+        THEME_COLOR: data.THEME_COLOR || prev.THEME_COLOR,
+        SITE_LOGO: data.SITE_LOGO || prev.SITE_LOGO
+      }));
+    } catch (err) {
+      console.error("Failed to fetch public settings:", err);
+    }
+  };
+
+  useEffect(() => {
+    refreshSettings();
+  }, []);
+
+  useEffect(() => {
+    // Apply theme color to CSS variables
+    if (settings.THEME_COLOR) {
+      document.documentElement.style.setProperty('--bkash-color', settings.THEME_COLOR);
+    }
+  }, [settings.THEME_COLOR]);
+
+  const updateSettings = (newSettings: Partial<SiteSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  return (
+    <SiteSettingsContext.Provider value={{ settings, updateSettings, refreshSettings }}>
+      {children}
+    </SiteSettingsContext.Provider>
+  );
+};
+
 // --- Theme Management ---
 const ThemeContext = React.createContext({
   theme: 'dark',
@@ -288,17 +355,34 @@ interface Agreement {
 
 // --- Components ---
 
-const BkashLogo = ({ className }: { className?: string }) => (
-  <div className={cn("flex items-center gap-3", className)}>
-    <div className="w-11 h-11 bg-bkash rounded-2xl flex items-center justify-center shadow-xl shadow-bkash/30 rotate-3 hover:rotate-0 transition-transform duration-300">
-      <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s" alt="bKash" className="w-7 h-7 object-contain brightness-0 invert" />
+const BkashLogo = ({ className }: { className?: string }) => {
+  const { settings } = useSiteSettings();
+  const [firstName, ...restNames] = settings.SITE_NAME.split(" ");
+  const lastName = restNames.join(" ");
+
+  return (
+    <div className={cn("flex items-center gap-3", className)}>
+      <div className="w-11 h-11 bg-bkash rounded-2xl flex items-center justify-center shadow-xl shadow-bkash/30 rotate-3 hover:rotate-0 transition-transform duration-300 overflow-hidden">
+        <img 
+          src={settings.SITE_LOGO} 
+          alt={settings.SITE_NAME} 
+          className="w-7 h-7 object-contain brightness-0 invert" 
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            // Fallback if logo fails to load
+            (e.target as HTMLImageElement).src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJ2tQ2k31bVQkbTPpGnt_OGsln5ESawn8rGg&s";
+          }}
+        />
+      </div>
+      <div>
+        <h1 className="font-black text-xl leading-none tracking-tighter text-bkash">
+          {firstName} <span className="text-surface-900 dark:text-white">{lastName}</span>
+        </h1>
+        <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest mt-1">Enterprise</p>
+      </div>
     </div>
-    <div>
-      <h1 className="font-black text-xl leading-none tracking-tighter text-bkash">bKash <span className="text-surface-900 dark:text-white">Pay</span></h1>
-      <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest mt-1">Enterprise</p>
-    </div>
-  </div>
-);
+  );
+};
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
@@ -564,6 +648,7 @@ const Dashboard = () => {
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { settings } = useSiteSettings();
 
   return (
     <div className="min-h-screen bg-white dark:bg-black overflow-x-hidden">
@@ -597,7 +682,7 @@ const LandingPage = () => {
               <span className="text-[10px] font-black uppercase tracking-widest text-bkash">Enterprise Payment Gateway</span>
             </div>
             <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-surface-900 dark:text-white">
-              The Future of <span className="text-bkash">bKash</span> Payments.
+              The Future of <span className="text-bkash">{settings.SITE_NAME}</span>.
             </h1>
             <p className="text-lg md:text-xl text-surface-500 font-medium max-w-lg">
               Empower your business with the most secure, fast, and scalable bKash payment gateway. Built for modern enterprises in Bangladesh.
@@ -2074,6 +2159,8 @@ const SettingsPage = () => {
   const userRole = localStorage.getItem("userRole");
   const merchantId = localStorage.getItem("merchant_id");
 
+  const { refreshSettings } = useSiteSettings();
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2091,6 +2178,7 @@ const SettingsPage = () => {
       if (res.ok) {
         setSettings({ ...settings, SITE_LOGO: data.url });
         toast.success("Logo uploaded successfully");
+        await refreshSettings();
       } else {
         toast.error(data.error || "Upload failed");
       }
@@ -2209,7 +2297,10 @@ const SettingsPage = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(settings)
         });
-        if (res.ok) toast.success("Settings updated successfully");
+        if (res.ok) {
+          toast.success("Settings updated successfully");
+          await refreshSettings();
+        }
       } else if (merchantId) {
         const res = await secureFetch("/api/merchant/settings", {
           method: "POST",
@@ -2303,6 +2394,67 @@ const SettingsPage = () => {
                       onChange={(e) => setSettings({...settings, APP_URL: e.target.value})}
                       className="input-field py-3"
                     />
+                  </div>
+                </div>
+
+                <h4 className="text-xs text-zinc-500 uppercase font-black tracking-widest mt-8">Site Customization</h4>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Site Name</label>
+                    <input 
+                      type="text" 
+                      value={settings.SITE_NAME || ""}
+                      onChange={(e) => setSettings({...settings, SITE_NAME: e.target.value})}
+                      className="input-field py-3"
+                      placeholder="e.g. bKash Pay"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Theme Color</label>
+                    <div className="flex gap-3">
+                      <input 
+                        type="color" 
+                        value={settings.THEME_COLOR || "#e2136e"}
+                        onChange={(e) => setSettings({...settings, THEME_COLOR: e.target.value})}
+                        className="w-12 h-12 rounded-xl border-0 p-0 overflow-hidden cursor-pointer bg-transparent"
+                      />
+                      <input 
+                        type="text" 
+                        value={settings.THEME_COLOR || "#e2136e"}
+                        onChange={(e) => setSettings({...settings, THEME_COLOR: e.target.value})}
+                        className="input-field py-3 font-mono"
+                        placeholder="#e2136e"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-surface-600 dark:text-surface-400">Site Logo</label>
+                    <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-950 rounded-2xl border border-surface-100 dark:border-surface-800">
+                      <div className="w-16 h-16 bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 flex items-center justify-center overflow-hidden">
+                        {settings.SITE_LOGO ? (
+                          <img src={settings.SITE_LOGO} alt="Logo" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Image size={24} className="text-surface-300" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <input 
+                          type="file" 
+                          id="logo-upload"
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                        />
+                        <label 
+                          htmlFor="logo-upload"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-bkash/10 text-bkash hover:bg-bkash/20 rounded-xl text-sm font-bold cursor-pointer transition-all"
+                        >
+                          {isUploadingLogo ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                          Upload New Logo
+                        </label>
+                        <p className="text-[10px] text-surface-400 mt-2">Recommended: Square PNG with transparent background.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6703,45 +6855,47 @@ const SubscriptionsRoute = () => {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <Toaster position="top-right" richColors theme="dark" />
-        <Routes>
-          <Route path="/*" element={
-            <Layout>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/pay" element={<Checkout />} />
-                <Route path="/merchant/register" element={<MerchantRegister />} />
-                <Route path="/admin" element={<Dashboard />} />
-                <Route path="/admin/login" element={<AdminLogin />} />
-                <Route path="/admin/refunds" element={<Refunds />} />
-                <Route path="/admin/b2c-payout" element={<B2CPayout />} />
-                <Route path="/admin/search" element={<SearchTransaction />} />
-                <Route path="/admin/transactions" element={<Transactions />} />
-                <Route path="/admin/settings" element={<SettingsPage />} />
-                <Route path="/admin/profile" element={<UserProfile />} />
-                <Route path="/admin/logs" element={<LogsPage />} />
-                <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
-                <Route path="/admin/analytics" element={<Analytics />} />
-                <Route path="/admin/customers" element={<Customers />} />
-                <Route path="/admin/statements" element={<Statements />} />
-                <Route path="/admin/security" element={<Security />} />
-                <Route path="/admin/users" element={<UserManagement />} />
-                <Route path="/admin/merchants" element={<MerchantManagement />} />
-                <Route path="/admin/kyc" element={<KYCVerification />} />
-                <Route path="/admin/api-docs" element={<ApiDocs />} />
-                <Route path="/admin/agreements" element={<Agreements />} />
-                <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
-                <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
-                <Route path="/generate" element={<PaymentLinkGenerator />} />
-                <Route path="/payment-success" element={<SuccessPage />} />
-                <Route path="/payment-failed" element={<FailurePage />} />
-              </Routes>
-            </Layout>
-          } />
-        </Routes>
-      </BrowserRouter>
-    </ThemeProvider>
+    <SiteSettingsProvider>
+      <ThemeProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" richColors theme="dark" />
+          <Routes>
+            <Route path="/*" element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/pay" element={<Checkout />} />
+                  <Route path="/merchant/register" element={<MerchantRegister />} />
+                  <Route path="/admin" element={<Dashboard />} />
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route path="/admin/refunds" element={<Refunds />} />
+                  <Route path="/admin/b2c-payout" element={<B2CPayout />} />
+                  <Route path="/admin/search" element={<SearchTransaction />} />
+                  <Route path="/admin/transactions" element={<Transactions />} />
+                  <Route path="/admin/settings" element={<SettingsPage />} />
+                  <Route path="/admin/profile" element={<UserProfile />} />
+                  <Route path="/admin/logs" element={<LogsPage />} />
+                  <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
+                  <Route path="/admin/analytics" element={<Analytics />} />
+                  <Route path="/admin/customers" element={<Customers />} />
+                  <Route path="/admin/statements" element={<Statements />} />
+                  <Route path="/admin/security" element={<Security />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/merchants" element={<MerchantManagement />} />
+                  <Route path="/admin/kyc" element={<KYCVerification />} />
+                  <Route path="/admin/api-docs" element={<ApiDocs />} />
+                  <Route path="/admin/agreements" element={<Agreements />} />
+                  <Route path="/admin/withdrawals" element={<WithdrawalsRoute />} />
+                  <Route path="/admin/subscriptions" element={<SubscriptionsRoute />} />
+                  <Route path="/generate" element={<PaymentLinkGenerator />} />
+                  <Route path="/payment-success" element={<SuccessPage />} />
+                  <Route path="/payment-failed" element={<FailurePage />} />
+                </Routes>
+              </Layout>
+            } />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
+    </SiteSettingsProvider>
   );
 }
