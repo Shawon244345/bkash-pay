@@ -1018,7 +1018,8 @@ app.post("/api/bkash/create-payment", async (req, res) => {
     const { amount, invoice, merchantId } = req.body;
     const headers = await getBkashHeaders(merchantId);
     const baseUrl = await getSetting("BKASH_BASE_URL");
-    const appUrl = await getSetting("APP_URL");
+    let appUrl = await getSetting("APP_URL");
+    if (appUrl.endsWith('/')) appUrl = appUrl.slice(0, -1);
     
     const { data } = await axios.post(
       `${baseUrl}/tokenized/checkout/create`,
@@ -1160,6 +1161,7 @@ app.post("/api/bkash/b2c-payment", authenticateToken, async (req: any, res) => {
 app.get("/api/bkash/callback", async (req, res) => {
   const { paymentID, status, mid } = req.query;
   const merchantId = mid as string;
+  console.log(`bKash Callback: paymentID=${paymentID}, status=${status}, mid=${merchantId}`);
   await logToFile("bKash Callback Received", { paymentID, status, merchantId });
 
   if (!paymentID) {

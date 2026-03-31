@@ -780,7 +780,7 @@ const StatItem = ({ label, value }: { label: string, value: string }) => (
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();
-  const merchantId = searchParams.get("mid");
+  const merchantId = searchParams.get("mid") || searchParams.get("merchantId");
   const paramAmount = searchParams.get("amount");
   const paramInvoice = searchParams.get("invoice");
   
@@ -791,6 +791,12 @@ const Checkout = () => {
   const [bkashURL, setBkashURL] = useState("");
   const isOnline = useOnlineStatus();
 
+  // Sync state with URL parameters if they change
+  useEffect(() => {
+    if (paramAmount) setAmount(paramAmount);
+    if (paramInvoice) setInvoice(paramInvoice);
+  }, [paramAmount, paramInvoice]);
+
   const handleCheckout = async () => {
     if (!isOnline) {
       toast.error("You are offline. Please connect to the internet to make a payment.");
@@ -798,6 +804,7 @@ const Checkout = () => {
     }
     setIsProcessing(true);
     setShowManualRedirect(false);
+    console.log("Initiating checkout for amount:", amount, "merchantId:", merchantId);
     try {
       const res = await secureFetch("/api/bkash/create-payment", {
         method: "POST",
@@ -814,28 +821,42 @@ const Checkout = () => {
         toast.success("Payment initiated! Redirecting...");
         
         const isIframe = window.self !== window.top;
+        console.log("Is Iframe:", isIframe, "Redirecting to:", data.bkashURL);
         
         if (isIframe) {
+          // In an iframe (like AI Studio preview), window.open is often blocked if not a user gesture
           const win = window.open(data.bkashURL, '_blank');
           if (!win) {
+            console.warn("Popup blocked, showing manual redirect button");
             setShowManualRedirect(true);
           }
         } else {
+          // Direct redirect if not in an iframe
           window.location.href = data.bkashURL;
         }
 
+        // Keep processing state for a bit to prevent multiple clicks
         setTimeout(() => {
           setIsProcessing(false);
-        }, 2000);
+        }, 3000);
       } else {
         toast.error(data.error || "Payment initiation failed");
         setIsProcessing(false);
       }
     } catch (err) {
-      toast.error("Something went wrong");
+      console.error("Checkout error:", err);
+      toast.error("Something went wrong during checkout");
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    // Auto-trigger if accessed via payment link (amount and mid present)
+    if (paramAmount && merchantId && !isProcessing && !bkashURL && isOnline) {
+      console.log("Auto-triggering checkout...");
+      handleCheckout();
+    }
+  }, [paramAmount, merchantId, isOnline]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
@@ -947,7 +968,7 @@ const Checkout = () => {
 const PaymentLinkGenerator = () => {
   const [amount, setAmount] = useState("");
   const [invoice, setInvoice] = useState("");
-  const [merchantId, setMerchantId] = useState("");
+  const [merchantId, setMerchantId] = useState(localStorage.getItem("merchant_id") || "");
   const [generatedLink, setGeneratedLink] = useState("");
   const [isCopied, setIsCopied] = useState(false);
 
@@ -956,13 +977,16 @@ const PaymentLinkGenerator = () => {
       toast.error("Please enter an amount");
       return;
     }
+    if (!merchantId) {
+      toast.warning("Warning: No Merchant ID found. Balance will not be credited to any account.");
+    }
     const baseUrl = window.location.origin;
     const params = new URLSearchParams();
     params.set("amount", amount);
     if (invoice) params.set("invoice", invoice);
     if (merchantId) params.set("mid", merchantId);
     
-    const link = `${baseUrl}/?${params.toString()}`;
+    const link = `${baseUrl}/pay?${params.toString()}`;
     setGeneratedLink(link);
     toast.success("Payment link generated!");
   };
