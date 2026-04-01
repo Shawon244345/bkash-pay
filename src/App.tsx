@@ -75,6 +75,7 @@ import {
   Banknote,
   Handshake,
   Hash,
+  Globe,
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -4584,6 +4585,7 @@ const Withdrawals = () => {
 
 const ApiDocs = () => {
   const [merchant, setMerchant] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("create");
   const appUrl = window.location.origin;
 
   useEffect(() => {
@@ -4596,104 +4598,249 @@ const ApiDocs = () => {
   const apiKey = merchant?.api_key || "bk_live_xxxxxxxxxxxxxxxxxxxxxxxx";
   const merchantId = merchant?.id || "YOUR_MERCHANT_ID";
 
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-8 backdrop-blur-sm">
-        <h3 className="text-2xl font-black mb-4 flex items-center gap-3 text-white">
-          <BookOpen className="text-bkash" size={28} />
-          Merchant API Documentation
-        </h3>
-        <p className="text-surface-400 leading-relaxed max-w-3xl">
-          Integrate bKash payments into your website or application using our secure REST API. 
-          Use your unique API Key for server-to-server communication.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
-            <h4 className="font-bold text-lg mb-4 text-surface-900 dark:text-white">1. Authentication</h4>
-            <p className="text-sm text-surface-500 mb-4">Include your API Key in the request headers.</p>
-            <div className="bg-surface-950 rounded-xl p-4 font-mono text-xs text-emerald-500 overflow-x-auto">
-              x-api-key: {apiKey}
-            </div>
-            <p className="text-[10px] text-surface-400 mt-2 italic">* Keep this key secret. Never expose it in client-side code.</p>
-          </div>
-
-          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
-            <h4 className="font-bold text-lg mb-4 text-surface-900 dark:text-white">2. Create Payment</h4>
-            <p className="text-sm text-surface-500 mb-4">Initiate a bKash payment session. Returns a checkout URL.</p>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="bg-emerald-500/10 text-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Post</span>
-                <span className="text-xs font-mono text-surface-400">{appUrl}/api/bkash/create-payment</span>
-              </div>
-              <div className="bg-surface-950 rounded-xl p-4 font-mono text-xs text-surface-300 overflow-x-auto">
-                {`{
+  const endpoints = [
+    {
+      id: "create",
+      name: "Create Payment",
+      method: "POST",
+      path: "/api/bkash/create-payment",
+      description: "Initiate a bKash payment session. Returns a checkout URL for the customer.",
+      params: `{
   "amount": "100.00",
   "invoice": "INV-123456",
   "merchantId": "${merchantId}"
-}`}
-              </div>
+}`,
+      response: `{
+  "paymentID": "PAY-123456789",
+  "bkashURL": "https://checkout.sandbox.bka.sh/..."
+}`
+    },
+    {
+      id: "execute",
+      name: "Execute Payment",
+      method: "POST",
+      path: "/api/bkash/execute-payment",
+      description: "Execute a payment after the customer has authorized it with their PIN/OTP.",
+      params: `{
+  "paymentID": "PAY-123456789"
+}`,
+      response: `{
+  "status": "completed",
+  "trxID": "TRX-ABC123XYZ"
+}`
+    },
+    {
+      id: "query",
+      name: "Query Payment",
+      method: "GET",
+      path: "/api/bkash/query-payment?paymentID=...",
+      description: "Check the current status of a specific payment session.",
+      params: "Query Param: paymentID",
+      response: `{
+  "paymentID": "PAY-123456789",
+  "status": "completed",
+  "amount": "100.00"
+}`
+    },
+    {
+      id: "refund",
+      name: "Refund Transaction",
+      method: "POST",
+      path: "/api/bkash/refund",
+      description: "Refund a previously completed transaction.",
+      params: `{
+  "paymentID": "PAY-123456789",
+  "trxID": "TRX-ABC123XYZ",
+  "amount": "50.00",
+  "sku": "Customer requested refund"
+}`,
+      response: `{
+  "status": "refunded",
+  "refundTrxID": "RFD-XYZ789"
+}`
+    }
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      <div className="bg-bkash-dark/50 border border-bkash-dark rounded-3xl p-8 backdrop-blur-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h3 className="text-2xl font-black mb-2 flex items-center gap-3 text-white">
+              <BookOpen className="text-bkash" size={28} />
+              API Documentation
+            </h3>
+            <p className="text-surface-400 leading-relaxed max-w-xl text-sm">
+              Integrate bKash payments into your platform using our secure REST API. 
+              Follow the steps below to get started.
+            </p>
+          </div>
+          <div className="bg-surface-950/50 border border-surface-800 rounded-2xl p-4">
+            <div className="text-[10px] font-black text-surface-500 uppercase tracking-widest mb-2">Your API Key</div>
+            <div className="flex items-center gap-3">
+              <code className="text-xs text-emerald-500 font-mono">{apiKey}</code>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(apiKey);
+                  toast.success("API Key copied!");
+                }}
+                className="text-surface-500 hover:text-white transition-colors"
+              >
+                <Copy size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl overflow-hidden shadow-sm">
+            <div className="flex border-b border-surface-100 dark:border-surface-800 overflow-x-auto no-scrollbar">
+              {endpoints.map((ep) => (
+                <button
+                  key={ep.id}
+                  onClick={() => setActiveTab(ep.id)}
+                  className={cn(
+                    "px-6 py-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2",
+                    activeTab === ep.id 
+                      ? "text-bkash border-bkash bg-bkash/5" 
+                      : "text-surface-400 border-transparent hover:text-surface-600 dark:hover:text-surface-200"
+                  )}
+                >
+                  {ep.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-8">
+              {endpoints.map((ep) => activeTab === ep.id && (
+                <motion.div 
+                  key={ep.id}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={cn(
+                        "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                        ep.method === "POST" ? "bg-emerald-500/10 text-emerald-500" : "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {ep.method}
+                      </span>
+                      <code className="text-sm font-mono text-surface-500">{ep.path}</code>
+                    </div>
+                    <p className="text-surface-600 dark:text-surface-400 leading-relaxed">
+                      {ep.description}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <div className="text-[10px] font-black text-surface-400 uppercase tracking-widest">Request Body</div>
+                      <div className="bg-surface-950 rounded-2xl p-5 font-mono text-xs text-surface-300 overflow-x-auto leading-relaxed">
+                        <pre>{ep.params}</pre>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="text-[10px] font-black text-surface-400 uppercase tracking-widest">Example Response</div>
+                      <div className="bg-surface-950 rounded-2xl p-5 font-mono text-xs text-emerald-500/80 overflow-x-auto leading-relaxed">
+                        <pre>{ep.response}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-6 flex gap-4">
+            <ShieldAlert className="text-amber-500 shrink-0" size={24} />
+            <div>
+              <h5 className="text-sm font-black text-amber-600 dark:text-amber-500 mb-1 uppercase tracking-widest">Security Warning</h5>
+              <p className="text-xs text-amber-700/80 dark:text-amber-500/70 leading-relaxed">
+                Never expose your API Key in frontend code (JavaScript/HTML). Always make API calls from your backend server to ensure your credentials remain secure.
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl p-6 shadow-sm">
-          <h4 className="font-bold text-lg mb-4 flex items-center justify-between text-surface-900 dark:text-white">
-            Live API Explorer
-            <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-1 rounded-full uppercase tracking-widest">Interactive</span>
-          </h4>
-          <p className="text-sm text-surface-500 mb-6">Test the payment flow directly from this documentation.</p>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-surface-500 uppercase tracking-widest">Amount (BDT)</label>
-              <input type="number" id="test-amount" defaultValue="10" className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-bkash/20 focus:border-bkash outline-none transition-all" />
-            </div>
-            <button 
-              onClick={async () => {
-                const amount = (document.getElementById('test-amount') as HTMLInputElement).value;
-                const toastId = toast.loading("Initiating test payment...");
-                try {
-                  const res = await secureFetch("/api/bkash/create-payment", {
-                    method: "POST",
-                    body: JSON.stringify({ amount, invoice: `TEST-${Date.now()}`, merchantId }),
-                  });
-                  const data = await res.json();
-                  if (data.bkashURL) {
-                    toast.success("Payment initiated! Redirecting...", { id: toastId });
-                    window.location.href = data.bkashURL;
-                  } else {
-                    toast.error(data.error || "Failed to create payment", { id: toastId });
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-3xl p-8 shadow-sm">
+            <h4 className="font-bold text-lg mb-4 flex items-center justify-between text-surface-900 dark:text-white">
+              API Explorer
+              <span className="text-[10px] bg-bkash/10 text-bkash px-2 py-1 rounded-full uppercase tracking-widest">Live Test</span>
+            </h4>
+            <p className="text-xs text-surface-500 mb-6 leading-relaxed">Test the payment flow directly from this documentation.</p>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest ml-1">Amount (BDT)</label>
+                <input type="number" id="test-amount" defaultValue="10" className="w-full bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-bkash/20 focus:border-bkash outline-none transition-all" />
+              </div>
+              <button 
+                onClick={async () => {
+                  const amount = (document.getElementById('test-amount') as HTMLInputElement).value;
+                  const toastId = toast.loading("Initiating test payment...");
+                  try {
+                    const res = await secureFetch("/api/bkash/create-payment", {
+                      method: "POST",
+                      body: JSON.stringify({ amount, invoice: `TEST-${Date.now()}`, merchantId }),
+                    });
+                    const data = await res.json();
+                    if (data.bkashURL) {
+                      toast.success("Payment initiated! Redirecting...", { id: toastId });
+                      window.location.href = data.bkashURL;
+                    } else {
+                      toast.error(data.error || "Failed to create payment", { id: toastId });
+                    }
+                  } catch (err) {
+                    toast.error("Network error", { id: toastId });
                   }
-                } catch (err) {
-                  toast.error("Network error", { id: toastId });
-                }
-              }}
-              className="w-full bg-bkash text-white font-black py-4 rounded-xl text-sm uppercase tracking-widest hover:bg-bkash/90 transition-all shadow-lg shadow-bkash/20"
-            >
-              Test Payment Flow
-            </button>
-          </div>
+                }}
+                className="w-full bg-bkash text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest hover:bg-bkash/90 transition-all shadow-xl shadow-bkash/20"
+              >
+                Test Payment Flow
+              </button>
+            </div>
 
-          <div className="mt-8 pt-8 border-t border-surface-100 dark:border-surface-800">
-            <h5 className="text-xs font-black text-surface-400 uppercase tracking-widest mb-4">API Metadata</h5>
-            <button 
-              onClick={async () => {
-                try {
-                  const res = await fetch("/api/docs");
-                  const data = await res.json();
-                  console.log("API Docs:", data);
-                  toast.info("API Metadata logged to console");
-                } catch (err) {
-                  toast.error("Failed to fetch API metadata");
-                }
-              }}
-              className="text-xs font-bold text-bkash hover:underline flex items-center gap-1"
-            >
-              <Terminal size={14} /> View JSON Definition
-            </button>
+            <div className="mt-8 pt-8 border-t border-surface-100 dark:border-surface-800">
+              <h5 className="text-[10px] font-black text-surface-400 uppercase tracking-widest mb-4">Resources</h5>
+              <div className="space-y-3">
+                <button 
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/docs");
+                      const data = await res.json();
+                      console.log("API Docs:", data);
+                      toast.info("API Metadata logged to console");
+                    } catch (err) {
+                      toast.error("Failed to fetch API metadata");
+                    }
+                  }}
+                  className="w-full flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-950 rounded-2xl text-xs font-bold text-surface-600 dark:text-surface-400 hover:text-bkash transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Terminal size={16} />
+                    JSON Definition
+                  </div>
+                  <ChevronRight size={14} />
+                </button>
+                <a 
+                  href="https://developer.bka.sh" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-full flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-950 rounded-2xl text-xs font-bold text-surface-600 dark:text-surface-400 hover:text-bkash transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Globe size={16} />
+                    Official bKash Docs
+                  </div>
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>

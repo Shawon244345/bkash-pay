@@ -11,6 +11,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import cors from "cors";
+import { body, validationResult } from "express-validator";
 
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -476,6 +478,13 @@ app.set('trust proxy', 1); // Trust first proxy (Nginx/cPanel)
 const PORT = Number(process.env.PORT) || 3000;
 
 // Security Middleware
+app.use(cors({
+  origin: "*", // In production, replace with your actual domain
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+  credentials: true
+}));
+
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for development ease, or configure properly
 }));
@@ -577,6 +586,15 @@ const authorizeRole = (roles: string[]) => {
     }
     next();
   };
+};
+
+// Validation Middleware
+const validateRequest = (req: any, res: any, next: any) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  next();
 };
 
 console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
@@ -1101,44 +1119,61 @@ app.get("/api/docs", (req, res) => {
     name: "bKash Payment Gateway API",
     version: APP_VERSION,
     description: "Secure API for bKash tokenized payment integration",
+    baseUrl: process.env.APP_URL || "http://localhost:3000",
+    authentication: {
+      type: "API Key or JWT",
+      header: "x-api-key or Authorization: Bearer <token>",
+      description: "API Key is for server-to-server, JWT is for user sessions"
+    },
     endpoints: [
       {
         path: "/api/bkash/create-payment",
         method: "POST",
-        description: "Create a new bKash payment",
-        security: "Public (with valid merchantId) or API Key (x-api-key)",
+        description: "Create a new bKash payment session",
+        security: "API Key or Public (with valid merchantId)",
         parameters: {
-          amount: "Number (Mandatory) - Amount in BDT",
-          invoice: "String (Optional) - Merchant invoice number",
-          merchantId: "String (Mandatory) - Merchant unique ID"
+          amount: "Number (Required) - BDT amount",
+          invoice: "String (Optional) - Unique invoice ID",
+          merchantId: "String (Required) - Your Merchant ID",
+          callbackURL: "String (Optional) - Custom callback URL"
         },
         response: {
-          bkashURL: "String - The URL to redirect the customer to bKash checkout"
+          bkashURL: "String - Redirect URL for checkout",
+          paymentID: "String - Unique bKash payment ID"
         }
       },
       {
         path: "/api/bkash/execute-payment",
         method: "POST",
-        description: "Execute a bKash payment after customer authorization",
+        description: "Execute payment after customer PIN/OTP",
         security: "Public",
         parameters: {
-          paymentID: "String (Mandatory) - The payment ID from bKash"
+          paymentID: "String (Required) - From create-payment"
         },
         response: {
-          status: "String - Payment execution status",
+          status: "String - 'completed' or 'failed'",
           trxID: "String - bKash transaction ID"
         }
       },
       {
-        path: "/api/bkash/b2c-payment",
-        method: "POST",
-        description: "Initiate a B2C payout (Merchant to Customer)",
-        security: "JWT Token (Admin/Merchant)",
+        path: "/api/bkash/query-payment",
+        method: "GET",
+        description: "Check status of a payment",
+        security: "API Key",
         parameters: {
-          amount: "Number (Mandatory)",
-          receiverMSISDN: "String (Mandatory)",
-          invoice: "String (Mandatory)",
-          merchantId: "String (Optional for merchants, mandatory for admins)"
+          paymentID: "String (Query Param)"
+        }
+      },
+      {
+        path: "/api/bkash/refund",
+        method: "POST",
+        description: "Refund a completed transaction",
+        security: "API Key or Admin JWT",
+        parameters: {
+          paymentID: "String (Required)",
+          trxID: "String (Required)",
+          amount: "Number (Required)",
+          sku: "String (Required) - Reason for refund"
         }
       }
     ]
@@ -1146,23 +1181,23 @@ app.get("/api/docs", (req, res) => {
 });
 
 // API Routes
-app.post("/api/bkash/create-payment", paymentLimiter, authenticateApiKeyOrToken, async (req, res) => {
-  try {
-    const { amount, invoice, merchantId } = req.body;
+app.post("/api/bkash/create-payment", 
+  paymentLimiter, 
+  authenticateApiKeyOrToken,
+  [
+    body('amount').isNumeric().withMessage('Amount must be a number'),
+    body('merchantId').notEmpty().withMessage('Merchant ID is required'),
+  ],
+  validateRequest,
+  async (req: any, res: any) => {
+    try {
+      const { amount, invoice, merchantId } = req.body;
 
-    // Validation
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ error: "Valid amount is required" });
-    }
-    if (!merchantId) {
-      return res.status(400).json({ error: "Merchant ID is required" });
-    }
-
-    // Security: Verify Merchant
-    const merchant = await db.get("SELECT * FROM merchants WHERE id = ? AND status = 'ACTIVE'", merchantId);
-    if (!merchant) {
-      return res.status(404).json({ error: "Active merchant not found" });
-    }
+      // Security: Verify Merchant
+      const merchant = await db.get("SELECT * FROM merchants WHERE id = ? AND status = 'ACTIVE'", merchantId);
+      if (!merchant) {
+        return res.status(404).json({ error: "Active merchant not found" });
+      }
 
     const headers = await getBkashHeaders(merchantId);
     const baseUrl = await getSetting("BKASH_BASE_URL");
@@ -1302,6 +1337,23 @@ app.post("/api/bkash/b2c-payment", authenticateToken, async (req: any, res) => {
   }
 });
 
+app.get("/api/bkash/query-payment", authenticateApiKeyOrToken, async (req: any, res: any) => {
+  const { paymentID } = req.query;
+  if (!paymentID) return res.status(400).json({ error: "Payment ID is required" });
+
+  try {
+    const merchantId = req.user.merchant_id;
+    const headers = await getBkashHeaders(merchantId);
+    const baseUrl = await getSetting("BKASH_BASE_URL");
+
+    const response = await axios.get(`${baseUrl}/checkout/payment/query/${paymentID}`, { headers });
+    res.json(response.data);
+  } catch (error: any) {
+    console.error("Query payment error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to query payment" });
+  }
+});
+
 app.get("/api/bkash/callback", async (req, res) => {
   const { paymentID, status, mid } = req.query;
   const merchantId = mid as string;
@@ -1368,55 +1420,62 @@ app.get("/api/bkash/callback", async (req, res) => {
   res.redirect("/payment-failed?status=" + (status || "unknown"));
 });
 
-app.post("/api/admin/login", async (req, res) => {
-  const { username, password } = req.body;
-  
-  try {
-    const user = await db.get("SELECT * FROM users WHERE username = ? OR email = ?", username, username);
+app.post("/api/admin/login", 
+  [
+    body('username').notEmpty().withMessage('Username is required'),
+    body('password').notEmpty().withMessage('Password is required'),
+  ],
+  validateRequest,
+  async (req: any, res: any) => {
+    const { username, password } = req.body;
+    
+    try {
+      const user = await db.get("SELECT * FROM users WHERE username = ? OR email = ?", username, username);
 
-    if (user && await comparePassword(password, user.password)) {
-      let merchant = null;
-      if (user.merchant_id) {
-        merchant = await db.get("SELECT * FROM merchants WHERE id = ?", user.merchant_id);
-      }
-
-      const token = generateToken(user);
-      const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
-      const userAgent = req.headers['user-agent'] || "unknown";
-      await db.run(
-        "INSERT INTO login_history (id, user_id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?, ?)",
-        uuidv4(), user.id, user.username, ip, userAgent, "SUCCESS"
-      );
-      await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
-      res.json({ 
-        success: true, 
-        token,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          avatar: user.avatar,
-          merchant_id: user.merchant_id,
-          merchant: merchant,
-          permissions: (user.permissions || "").split(",").filter(Boolean)
+      if (user && await comparePassword(password, user.password)) {
+        let merchant = null;
+        if (user.merchant_id) {
+          merchant = await db.get("SELECT * FROM merchants WHERE id = ?", user.merchant_id);
         }
-      });
-    } else {
-      const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
-      const userAgent = req.headers['user-agent'] || "unknown";
-      await db.run(
-        "INSERT INTO login_history (id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?)",
-        uuidv4(), username, ip, userAgent, "FAILED"
-      );
-      await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
-      res.status(401).json({ error: "Invalid credentials" });
+
+        const token = generateToken(user);
+        const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
+        const userAgent = req.headers['user-agent'] || "unknown";
+        await db.run(
+          "INSERT INTO login_history (id, user_id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?, ?)",
+          uuidv4(), user.id, user.username, ip, userAgent, "SUCCESS"
+        );
+        await auditLog("LOGIN_SUCCESS", user.username, "User logged in successfully");
+        res.json({ 
+          success: true, 
+          token,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            avatar: user.avatar,
+            merchant_id: user.merchant_id,
+            merchant: merchant,
+            permissions: (user.permissions || "").split(",").filter(Boolean)
+          }
+        });
+      } else {
+        const ip = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || "unknown").split(',')[0].trim();
+        const userAgent = req.headers['user-agent'] || "unknown";
+        await db.run(
+          "INSERT INTO login_history (id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?)",
+          uuidv4(), username, ip, userAgent, "FAILED"
+        );
+        await auditLog("LOGIN_FAILED", username, "Invalid login attempt");
+        res.status(401).json({ error: "Invalid credentials" });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ error: "Internal server error" });
   }
-});
+);
 
 app.get("/api/user/profile", authenticateToken, async (req: any, res) => {
   try {
@@ -1444,37 +1503,46 @@ app.get("/api/user/profile", authenticateToken, async (req: any, res) => {
   }
 });
 
-app.post("/api/merchant/register", async (req, res) => {
-  const { name, email, password } = req.body;
-  
-  try {
-    const existingUser = await db.get("SELECT * FROM users WHERE email = ?", email);
-    if (existingUser) {
-      return res.status(400).json({ error: "Email already registered" });
+app.post("/api/merchant/register", 
+  [
+    body('name').notEmpty().withMessage('Merchant name is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  validateRequest,
+  async (req: any, res: any) => {
+    const { name, email, password } = req.body;
+    
+    try {
+      const existingUser = await db.get("SELECT * FROM users WHERE email = ?", email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      const merchantId = uuidv4();
+      const userId = uuidv4();
+      const apiKey = `bk_${uuidv4().replace(/-/g, '')}`;
+      const hashedPassword = await hashPassword(password);
+
+      await db.run(
+        "INSERT INTO merchants (id, name, email, api_key) VALUES (?, ?, ?, ?)",
+        merchantId, name, email, apiKey
+      );
+
+      const permissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
+      await db.run(
+        "INSERT INTO users (id, username, email, password, role, permissions, merchant_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        userId, email, email, hashedPassword, "merchant", permissions, merchantId
+      );
+
+      await auditLog("MERCHANT_REGISTER", email, "New merchant registered");
+      res.json({ success: true, message: "Merchant registered successfully" });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
-
-    const merchantId = uuidv4();
-    const userId = uuidv4();
-    const apiKey = `bk_${uuidv4().replace(/-/g, '')}`;
-    const hashedPassword = await hashPassword(password);
-
-    await db.run(
-      "INSERT INTO merchants (id, name, email, api_key) VALUES (?, ?, ?, ?)",
-      merchantId, name, email, apiKey
-    );
-
-    const permissions = "dashboard,transactions,search,refunds,profile,analytics,customers,statements,settings,api-docs,withdrawals,subscriptions";
-    await db.run(
-      "INSERT INTO users (id, username, email, password, role, permissions, merchant_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      userId, email, email, hashedPassword, "merchant", permissions, merchantId
-    );
-
-    res.json({ success: true, message: "Merchant registered successfully" });
-  } catch (error) {
-    console.error("Registration error:", error);
-    res.status(500).json({ error: "Internal server error" });
   }
-});
+);
 
 app.get("/api/merchant/settings", authenticateToken, authorizeRole(['merchant', 'admin']), async (req: any, res) => {
   const merchantId = req.user.merchant_id;
@@ -2031,43 +2099,52 @@ app.post("/api/admin/settings", authenticateToken, authorizeRole(['admin']), asy
   }
 });
 
-app.post("/api/bkash/refund", authenticateToken, async (req: any, res) => {
-  try {
-    const { paymentID, trxID, amount, sku, reason } = req.body;
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || "";
-    const initiated_by = user.username;
-    
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ error: "Valid refund amount is required" });
-    }
+app.post("/api/bkash/refund", 
+  authenticateToken,
+  [
+    body('paymentID').notEmpty().withMessage('Payment ID is required'),
+    body('trxID').notEmpty().withMessage('Transaction ID is required'),
+    body('amount').isNumeric().withMessage('Amount must be a number'),
+    body('sku').notEmpty().withMessage('Reason (SKU) is required'),
+  ],
+  validateRequest,
+  async (req: any, res: any) => {
+    try {
+      const { paymentID, trxID, amount, sku, reason } = req.body;
+      const user = req.user;
+      const ip = req.ip || req.headers['x-forwarded-for'] || "";
+      const initiated_by = user.username;
+      
+      if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+        return res.status(400).json({ error: "Valid refund amount is required" });
+      }
 
-    // Check transaction ownership and mode
-    const transaction = await db.get("SELECT merchant_id, payment_mode, amount as original_amount FROM transactions WHERE trx_id = ?", trxID);
-    
-    if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
-    }
+      // Check transaction ownership and mode
+      const transaction = await db.get("SELECT merchant_id, payment_mode, amount as original_amount FROM transactions WHERE trx_id = ?", trxID);
+      
+      if (!transaction) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
 
-    // Ensure refund amount doesn't exceed original amount
-    if (Number(amount) > Number(transaction.original_amount)) {
-      return res.status(400).json({ error: "Refund amount cannot exceed original transaction amount" });
-    }
+      // Ensure refund amount doesn't exceed original amount
+      if (Number(amount) > Number(transaction.original_amount)) {
+        return res.status(400).json({ error: "Refund amount cannot exceed original transaction amount" });
+      }
 
-    // Strict rule: Super Admin cannot refund ANY transaction belonging to a merchant
-    if (user.role === 'admin' && transaction.merchant_id) {
-      return res.status(403).json({ 
-        error: "Super Admin is restricted from refunding merchant transactions. Merchants must handle their own refunds." 
-      });
-    }
+      // Strict rule: Super Admin cannot refund ANY transaction belonging to a merchant
+      if (user.role === 'admin' && transaction.merchant_id) {
+        return res.status(403).json({ 
+          error: "Super Admin is restricted from refunding merchant transactions. Merchants must handle their own refunds." 
+        });
+      }
 
-    // If it's a merchant trying to refund, ensure they own the transaction
-    if (user.role === 'merchant' && transaction.merchant_id !== user.merchant_id) {
-      return res.status(403).json({ error: "Unauthorized: You can only refund your own transactions." });
-    }
+      // If it's a merchant trying to refund, ensure they own the transaction
+      if (user.role === 'merchant' && transaction.merchant_id !== user.merchant_id) {
+        return res.status(403).json({ error: "Access denied. You do not own this transaction." });
+      }
 
-    // Check if already refunded
-    const existing = await db.get("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'", trxID);
+      // Check if already refunded
+      const existing = await db.get("SELECT * FROM refunds WHERE original_trx_id = ? AND status = 'COMPLETED'", trxID);
     if (existing) {
       return res.status(400).json({ error: "This transaction has already been refunded" });
     }
@@ -2651,6 +2728,21 @@ async function startServer() {
     console.error("CRITICAL: Error during server startup:", error);
   }
 }
+
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err);
+  
+  const status = err.status || 500;
+  const message = process.env.NODE_ENV === 'production' 
+    ? "Internal Server Error" 
+    : err.message || "Internal Server Error";
+
+  res.status(status).json({
+    error: message,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+  });
+});
 
 export default app;
 
