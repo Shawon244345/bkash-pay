@@ -4604,7 +4604,7 @@ const ApiDocs = () => {
       name: "Create Payment",
       method: "POST",
       path: "/api/bkash/create-payment",
-      description: "Initiate a bKash payment session. Returns a checkout URL for the customer.",
+      description: "Initiate a bKash payment session. If your account is in GLOBAL mode, the server's credentials will be used automatically to process the request.",
       params: `{
   "amount": "100.00",
   "invoice": "INV-123456",
@@ -4761,6 +4761,18 @@ const ApiDocs = () => {
               <h5 className="text-sm font-black text-amber-600 dark:text-amber-500 mb-1 uppercase tracking-widest">Security Warning</h5>
               <p className="text-xs text-amber-700/80 dark:text-amber-500/70 leading-relaxed">
                 Never expose your API Key in frontend code (JavaScript/HTML). Always make API calls from your backend server to ensure your credentials remain secure.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-bkash/5 border border-bkash/20 rounded-3xl p-6 flex gap-4">
+            <Zap className="text-bkash shrink-0" size={24} />
+            <div>
+              <h5 className="text-sm font-black text-bkash mb-1 uppercase tracking-widest">Global Mode Integration</h5>
+              <p className="text-xs text-surface-600 dark:text-surface-400 leading-relaxed">
+                When your account is set to <strong>GLOBAL</strong> mode, you don't need to provide your own bKash credentials. 
+                Our server will use its secure global credentials to process your payments. You only need to provide your 
+                <code>merchantId</code> and <code>x-api-key</code> in your requests.
               </p>
             </div>
           </div>

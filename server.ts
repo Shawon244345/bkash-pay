@@ -1123,14 +1123,14 @@ app.get("/api/docs", (req, res) => {
     authentication: {
       type: "API Key or JWT",
       header: "x-api-key or Authorization: Bearer <token>",
-      description: "API Key is for server-to-server, JWT is for user sessions"
+      description: "API Key is for server-to-server integration, JWT is for user sessions. In GLOBAL mode, the server's bKash credentials are used to process your requests."
     },
     endpoints: [
       {
         path: "/api/bkash/create-payment",
         method: "POST",
-        description: "Create a new bKash payment session",
-        security: "API Key or Public (with valid merchantId)",
+        description: "Create a new bKash payment session. If your account is in GLOBAL mode, the server's credentials will be used automatically.",
+        security: "API Key (x-api-key header) or Public (with valid merchantId)",
         parameters: {
           amount: "Number (Required) - BDT amount",
           invoice: "String (Optional) - Unique invoice ID",
@@ -1193,13 +1193,19 @@ app.post("/api/bkash/create-payment",
     try {
       const { amount, invoice, merchantId } = req.body;
 
+      // Security: If authenticated via API Key, ensure merchantId matches
+      if (req.user && req.user.role === 'merchant' && req.user.merchant_id !== merchantId) {
+        return res.status(403).json({ error: "Access denied. Merchant ID mismatch." });
+      }
+
       // Security: Verify Merchant
       const merchant = await db.get("SELECT * FROM merchants WHERE id = ? AND status = 'ACTIVE'", merchantId);
       if (!merchant) {
         return res.status(404).json({ error: "Active merchant not found" });
       }
 
-    const headers = await getBkashHeaders(merchantId);
+      // Determine credentials to use (GLOBAL or OWN)
+      const headers = await getBkashHeaders(merchantId);
     const baseUrl = await getSetting("BKASH_BASE_URL");
     let appUrl = await getSetting("APP_URL");
     if (appUrl.endsWith('/')) appUrl = appUrl.slice(0, -1);
