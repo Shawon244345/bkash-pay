@@ -4675,19 +4675,36 @@ const ApiDocs = () => {
               Follow the steps below to get started.
             </p>
           </div>
-          <div className="bg-surface-950/50 border border-surface-800 rounded-2xl p-4">
-            <div className="text-[10px] font-black text-surface-500 uppercase tracking-widest mb-2">Your API Key</div>
-            <div className="flex items-center gap-3">
-              <code className="text-xs text-emerald-500 font-mono">{apiKey}</code>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(apiKey);
-                  toast.success("API Key copied!");
-                }}
-                className="text-surface-500 hover:text-white transition-colors"
-              >
-                <Copy size={14} />
-              </button>
+          <div className="flex flex-col gap-4">
+            <div className="bg-surface-950/50 border border-surface-800 rounded-2xl p-4">
+              <div className="text-[10px] font-black text-surface-500 uppercase tracking-widest mb-2">Base URL</div>
+              <div className="flex items-center gap-3">
+                <code className="text-xs text-bkash font-mono">{window.location.origin}</code>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.origin);
+                    toast.success("Base URL copied!");
+                  }}
+                  className="text-surface-500 hover:text-white transition-colors"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="bg-surface-950/50 border border-surface-800 rounded-2xl p-4">
+              <div className="text-[10px] font-black text-surface-500 uppercase tracking-widest mb-2">Your API Key</div>
+              <div className="flex items-center gap-3">
+                <code className="text-xs text-emerald-500 font-mono">{apiKey}</code>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(apiKey);
+                    toast.success("API Key copied!");
+                  }}
+                  className="text-surface-500 hover:text-white transition-colors"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
